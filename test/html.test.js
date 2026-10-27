@@ -7,7 +7,7 @@ import { botMediaMetadata, decodeAIRich, prepareFileArtifact, sendHtmlArtifact, 
 import { htmlMultiplayerPrelude, withHtmlMultiplayer } from '../src/Utils/html-multiplayer.js';
 
 test('html-app-guard', async () => {
-    const clean = checkHtmlApp('<style>html,body{height:300px;margin:0}</style><div>halo</div>', { height: 300 });
+    const clean = checkHtmlApp('<style>html,body{height:300px;margin:0}</style><div>hello</div>', { height: 300 });
     assert.equal(clean.ok, true);
     assert.deepEqual(clean.problems, []);
     assert.deepEqual(clean.warnings, []);
@@ -38,11 +38,11 @@ test('html-app-guard', async () => {
     const stoppable = checkHtmlApp('<script>const t = setInterval(tick, 16); addEventListener("visibilitychange", () => clearInterval(t))</script>', { height: 100 });
     assert.equal(stoppable.ok, true);
 
-    const noHeight = checkHtmlApp('<div>halo</div>');
+    const noHeight = checkHtmlApp('<div>hello</div>');
     assert.equal(noHeight.ok, true);
     assert.match(noHeight.warnings.join(' '), /no height settled/);
 
-    const pinned = checkHtmlApp('<style>body{height:240px}</style><div>halo</div>');
+    const pinned = checkHtmlApp('<style>body{height:240px}</style><div>hello</div>');
     assert.equal(pinned.warnings.length, 0);
 
     const ratio = checkHtmlApp('<style>body{height:200px}.a{aspect-ratio:16/9}</style>');
@@ -102,15 +102,15 @@ test('html-artifact', async () => {
         relayMessage: async (jid, message) => { calls.push({ jid, message }); }
     };
 
-    const html = '<!DOCTYPE html><body><h1>jendela</h1></body>';
-    const artifact = await prepareFileArtifact(sock, html, { fileName: 'main.html', title: 'Judul', id: 'fixed-id' });
+    const html = '<!DOCTYPE html><body><h1>window</h1></body>';
+    const artifact = await prepareFileArtifact(sock, html, { fileName: 'main.html', title: 'Title', id: 'fixed-id' });
 
     assert.equal(artifact.mediaId, 'fixed-id');
     assert.equal(artifact.section.view_model.primitive.__typename, 'GenAIFilePrimitive');
     assert.equal(artifact.section.view_model.primitive.preview_image.media_id, 'fixed-id');
     assert.equal(artifact.section.view_model.primitive.preview_image.mime_type, 'text/html');
     assert.equal(artifact.section.view_model.primitive.file_extension, 'html');
-    assert.equal(artifact.section.view_model.primitive.title, 'Judul');
+    assert.equal(artifact.section.view_model.primitive.title, 'Title');
     assert.equal(artifact.mediaDetails.id, 'fixed-id');
     assert.equal(artifact.mediaDetails.previewMedia.directPath, '/v/t62/enc');
     assert.equal(artifact.mediaDetails.highResMedia.directPath, '/v/t62/enc');
@@ -124,7 +124,7 @@ test('html-artifact', async () => {
     );
 
     calls.length = 0;
-    const sent = await sendHtmlArtifact(sock, '2@s.whatsapp.net', html, { fileName: 'app.html', title: 'Mini App', label: 'buka' });
+    const sent = await sendHtmlArtifact(sock, '2@s.whatsapp.net', html, { fileName: 'app.html', title: 'Mini App', label: 'open' });
 
     assert.ok(sent.message.key.id);
     assert.ok(sent.mediaId);
@@ -143,11 +143,11 @@ test('html-artifact', async () => {
     assert.equal(decoded.sections[0].view_model.primitive.preview_image.media_id, sent.mediaId);
     assert.deepEqual(
         (calls[0].message.botForwardedMessage?.message?.richResponseMessage ?? calls[0].message.richResponseMessage).submessages,
-        [{ messageType: 2, messageText: 'buka' }]
+        [{ messageType: 2, messageText: 'open' }]
     );
 
     const rich = new AIRich(sock);
-    assert.throws(() => rich.setBotMetadata('bukan objek'), ContentValidationError);
+    assert.throws(() => rich.setBotMetadata('not an object'), ContentValidationError);
     assert.throws(() => rich.setBotMetadata([]), ContentValidationError);
     rich.setBotMetadata({ a: 1 }).setBotMetadata({ b: 2 });
     assert.deepEqual(rich._botMetadataExtra, { a: 1, b: 2 });
@@ -165,11 +165,11 @@ test('html-media', async () => {
     assert.throws(() => htmlMedia(Buffer.from('x'), { mimetype: 'video/mp4', tag: 'iframe' }), TypeError);
     assert.throws(() => htmlMedia(Buffer.from('x'), { mimetype: 'video/mp4', id: '9bad' }), TypeError);
 
-    const clip = htmlMedia(Buffer.from('fake mp4 bytes'), { mimetype: 'video/mp4', id: 'clip', label: 'Tap untuk memuat' });
+    const clip = htmlMedia(Buffer.from('fake mp4 bytes'), { mimetype: 'video/mp4', id: 'clip', label: 'Tap to load' });
 
     assert.match(clip, /<video id="clip" controls preload="none" playsinline><\/video>/);
     assert.match(clip, /<button id="clip_go"/);
-    assert.match(clip, /Tap untuk memuat/);
+    assert.match(clip, /Tap to load/);
     assert.match(clip, /data:video\/mp4;base64,/);
 
     /** The source must not sit in the src attribute, or the tap gate is decorative. */

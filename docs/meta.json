@@ -1,13 +1,13 @@
 {
  "site": {
-  "name": "Elaina Baileys",
-  "repository": "https://github.com/rexxzyid/elaina-baileys",
-  "npm": "https://www.npmjs.com/package/@rexxhayanasi/elaina-baileys",
+  "name": "Zahan Baileys",
+  "repository": "https://github.com/Shan-droid770/zahan-baileys",
+  "npm": "https://www.npmjs.com/package/zahan-baileys",
+  "website": "https://www.sahanhost.qzz.io",
   "domain": ""
  },
  "languages": [
-  "en",
-  "id"
+  "en"
  ],
  "strings": {
   "en": {
@@ -15,7 +15,7 @@
    "heroTag": "WhatsApp Multi-Device for Node.js",
    "heroStart": "Get started",
    "onThisPage": "On this page",
-   "footer": "Elaina Baileys documentation. Source on {repo}.",
+   "footer": "Zahan Baileys documentation. Source on {repo}.",
    "apiIntro": "{total} socket members, generated from the type declarations of v{version} on {date}. Every entry below is read straight from the code, so it never drifts from what the library actually exposes.",
    "apiSearch": "Filter methods…",
    "returns": "Returns",
@@ -23,132 +23,98 @@
    "optional": "optional",
    "moduleExports": "Module exports",
    "exportsIntro": "The exports most worth knowing, grouped by what they do. The package exports {total} names in total, including internals you will rarely reach for."
-  },
-  "id": {
-   "skip": "Lompat ke konten",
-   "heroTag": "WhatsApp Multi-Device untuk Node.js",
-   "heroStart": "Mulai",
-   "onThisPage": "Di halaman ini",
-   "footer": "Dokumentasi Elaina Baileys. Sumbernya di {repo}.",
-   "apiIntro": "{total} anggota socket, dibangkitkan dari deklarasi tipe v{version} pada {date}. Semua entri di bawah dibaca langsung dari kode, jadi tidak pernah melenceng dari yang benar-benar disediakan library.",
-   "apiSearch": "Saring method…",
-   "returns": "Mengembalikan",
-   "type": "Tipe",
-   "optional": "opsional",
-   "moduleExports": "Ekspor modul",
-   "exportsIntro": "Ekspor yang paling perlu diketahui, dikelompokkan berdasarkan fungsinya. Paket ini mengekspor {total} nama secara keseluruhan, termasuk internal yang jarang kamu butuhkan."
   }
  },
  "pages": [
   {
    "id": "index",
    "title": {
-    "en": "Overview",
-    "id": "Ringkasan"
+    "en": "Overview"
    },
    "description": {
-    "en": "A modern WhatsApp Multi-Device library for Node.js, with MessageBuilder and channel support built in.",
-    "id": "Library WhatsApp Multi-Device modern untuk Node.js, dengan MessageBuilder dan dukungan channel bawaan."
+    "en": "A modern WhatsApp Multi-Device library for Node.js, with MessageBuilder and channel support built in."
    }
   },
   {
    "id": "getting-started",
    "title": {
-    "en": "Getting started",
-    "id": "Mulai cepat"
+    "en": "Getting started"
    },
    "description": {
-    "en": "Install the package, open a connection, and pair a device with a pairing code.",
-    "id": "Pasang paket, buka koneksi, dan pasangkan perangkat dengan pairing code."
+    "en": "Install the package, open a connection, and pair a device with a pairing code."
    }
   },
   {
    "id": "sessions",
    "title": {
-    "en": "Session storage",
-    "id": "Penyimpanan sesi"
+    "en": "Session storage"
    },
    "description": {
-    "en": "Keep credentials safe across restarts: multi-file, single-file, SQLite, SQL, Mongo, Redis, NekoDB and caching.",
-    "id": "Jaga kredensial tetap aman lintas restart: multi-berkas, satu berkas, SQLite, SQL, Mongo, Redis, NekoDB, dan caching."
+    "en": "Keep credentials safe across restarts: multi-file, single-file, SQLite, SQL, Mongo, Redis, NekoDB and caching."
    }
   },
   {
    "id": "pairing",
    "title": {
-    "en": "Pairing code",
-    "id": "Kode pairing"
+    "en": "Pairing code"
    },
    "description": {
-    "en": "Link a device without a QR: server-confirmed requests, one code at a time, and custom codes.",
-    "id": "Pasangkan perangkat tanpa QR: permintaan dikonfirmasi server, satu kode sekali waktu, dan kode kustom."
+    "en": "Link a device without a QR: server-confirmed requests, one code at a time, and custom codes."
    }
   },
   {
    "id": "messages",
    "title": {
-    "en": "Messages",
-    "id": "Pesan"
+    "en": "Messages"
    },
    "description": {
-    "en": "Receive messages, read their text, address users correctly, and send every basic message type.",
-    "id": "Terima pesan, baca teksnya, alamati pengguna dengan benar, dan kirim semua tipe pesan dasar."
+    "en": "Receive messages, read their text, address users correctly, and send every basic message type."
    }
   },
   {
    "id": "builder",
    "title": {
-    "en": "MessageBuilder",
-    "id": "MessageBuilder"
+    "en": "MessageBuilder"
    },
    "description": {
-    "en": "Interactive messages: buttons, lists, carousels and AIRich rich responses.",
-    "id": "Pesan interaktif: tombol, list, carousel, dan respons kaya AIRich."
+    "en": "Interactive messages: buttons, lists, carousels and AIRich rich responses."
    }
   },
   {
    "id": "newsletter",
    "title": {
-    "en": "Newsletter",
-    "id": "Newsletter"
+    "en": "Newsletter"
    },
    "description": {
-    "en": "Create and run WhatsApp channels: metadata, admins, polls, questions and insights.",
-    "id": "Buat dan kelola channel WhatsApp: metadata, admin, polling, pertanyaan, dan insight."
+    "en": "Create and run WhatsApp channels: metadata, admins, polls, questions and insights."
    }
   },
   {
    "id": "groups",
    "title": {
-    "en": "Groups",
-    "id": "Grup"
+    "en": "Groups"
    },
    "description": {
-    "en": "Group and community management, participants, and profile pictures.",
-    "id": "Pengelolaan grup dan komunitas, peserta, dan foto profil."
+    "en": "Group and community management, participants, and profile pictures."
    }
   },
   {
    "id": "examples",
    "title": {
-    "en": "Examples",
-    "id": "Contoh"
+    "en": "Examples"
    },
    "description": {
-    "en": "Complete, runnable bots assembled from the pieces in this documentation.",
-    "id": "Bot lengkap yang bisa langsung dijalankan, dirakit dari potongan di dokumentasi ini."
+    "en": "Complete, runnable bots assembled from the pieces in this documentation."
    }
   },
   {
    "id": "api",
    "generated": "api",
    "title": {
-    "en": "API reference",
-    "id": "Referensi API"
+    "en": "API reference"
    },
    "description": {
-    "en": "Every socket method and module export, generated from the type declarations on main.",
-    "id": "Semua method socket dan ekspor modul, dibangkitkan dari deklarasi tipe di branch main."
+    "en": "Every socket method and module export, generated from the type declarations on main."
    }
   }
  ]

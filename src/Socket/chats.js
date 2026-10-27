@@ -1,4 +1,4 @@
-/* Elaina Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
+/* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 import { TTLCache } from '../Utils/ttl-cache.js';
 import { Boom } from '@hapi/boom';
 import { proto } from '../../WAProto/index.js';
@@ -1385,7 +1385,7 @@ export const makeChatsSocket = (config) => {
             info.jid = onWa.jid;
         }
         if (!info.exists) {
-            info.notes.push('Nomor tidak terdaftar di WhatsApp');
+            info.notes.push('Number is not registered on WhatsApp');
             return info;
         }
         const biz = await getBusinessProfile(info.jid).catch(() => null);
@@ -1402,13 +1402,13 @@ export const makeChatsSocket = (config) => {
         if (cap) {
             info.self = { capped: cap.capped, warned: cap.warned, unlimited: cap.unlimited, remaining: cap.remaining };
             if (cap.capped) {
-                info.notes.push('Akunmu sedang di-cap untuk chat baru, rem dulu');
+                info.notes.push('Your account is rate-limited for new chats, slow down');
             }
             else if (cap.warned) {
-                info.notes.push('Akunmu sudah diperingatkan soal chat baru');
+                info.notes.push('Your account has been warned about new chats');
             }
             else {
-                info.notes.push('Akunmu sehat untuk chat baru');
+                info.notes.push('Your account is healthy for new chats');
             }
         }
         return info;

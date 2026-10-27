@@ -1,6 +1,6 @@
 # Examples
 
-Complete programs, not fragments. Each one runs as written once you have `@rexxhayanasi/elaina-baileys` installed and `"type": "module"` set.
+Complete programs, not fragments. Each one runs as written once you have `zahan-baileys` installed and `"type": "module"` set.
 
 ## A command bot
 
@@ -10,7 +10,7 @@ Reconnects on drop, ignores history sync, and routes text commands.
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason
-} from '@rexxhayanasi/elaina-baileys'
+} from 'zahan-baileys'
 import pino from 'pino'
 
 const PREFIX = '.'
@@ -98,7 +98,7 @@ Three details worth copying:
 For a headless server where scanning a QR is awkward.
 
 ```js
-import makeWASocket, { useMultiFileAuthState } from '@rexxhayanasi/elaina-baileys'
+import makeWASocket, { useMultiFileAuthState } from 'zahan-baileys'
 import pino from 'pino'
 
 const PHONE = '6281234567890'
@@ -127,16 +127,16 @@ Enter the code on the phone under **Linked devices → Link with phone number**.
 ## An interactive menu
 
 ```js
-import { Button } from '@rexxhayanasi/elaina-baileys'
+import { Button } from 'zahan-baileys'
 
 async function sendMenu(sock, jid) {
   const menu = new Button(sock)
-    .setTitle('Elaina')
+    .setTitle('Zahan')
     .setBody('What would you like to do?')
-    .setFooter('Elaina Baileys')
+    .setFooter('Zahan Baileys')
     .addReply('Ping', 'menu_ping')
     .addReply('About', 'menu_about')
-    .addUrl('Docs', 'https://github.com/rexxzyid/elaina-baileys')
+    .addUrl('Docs', 'https://github.com/Shan-droid770/zahan-baileys')
 
   await menu.send(jid)
 }
@@ -163,7 +163,7 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
   }
 
   if (selected.includes('menu_about')) {
-    await sock.sendMessage(jid, { text: 'Elaina Baileys 💜' })
+    await sock.sendMessage(jid, { text: 'Zahan Baileys 💜' })
   }
 })
 ```
@@ -173,7 +173,7 @@ Native-flow replies arrive as `paramsJson`, a JSON string rather than a bare id 
 ## Posting to a channel
 
 ```js
-import makeWASocket, { useMultiFileAuthState } from '@rexxhayanasi/elaina-baileys'
+import makeWASocket, { useMultiFileAuthState } from 'zahan-baileys'
 
 const CHANNEL = '123456789@newsletter'
 
@@ -195,7 +195,7 @@ sock.ev.on('connection.update', async ({ connection }) => {
 
   console.log('capabilities:', capabilities)
 
-  await sock.sendMessage(CHANNEL, { text: 'Update from Elaina 💜' })
+  await sock.sendMessage(CHANNEL, { text: 'Update from Zahan 💜' })
 })
 ```
 
@@ -206,7 +206,7 @@ Checking capabilities first is worth the extra call. Several channel features ar
 `downloadContentFromMessage` takes the media node itself — not the whole message — plus its type, and returns a stream:
 
 ```js
-import { downloadContentFromMessage } from '@rexxhayanasi/elaina-baileys'
+import { downloadContentFromMessage } from 'zahan-baileys'
 import { writeFile } from 'node:fs/promises'
 
 async function toBuffer(stream) {

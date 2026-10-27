@@ -1,230 +1,229 @@
-# Panduan agen: update WhatsApp Web untuk Elaina Baileys
+# Agent guide: applying WhatsApp Web updates to Zahan Baileys
 
-File ini adalah instruksi kerja untuk agen AI (ChatGPT Codex, Claude Code, atau
-sejenisnya) yang diminta memeriksa dan menerapkan update WhatsApp Web ke fork
-ini. Kalau kamu memakai ChatGPT versi chat biasa, salin seluruh isi file ini
-sebagai *system prompt* / *custom instruction*, lalu berikan output perintah di
-bawah sebagai bahan analisis.
+This file is the working instruction set for an AI agent (ChatGPT Codex, Claude
+Code, or similar) asked to inspect and apply WhatsApp Web updates to this fork.
+If you are using a plain chat version of ChatGPT, copy this whole file as a
+*system prompt* / *custom instruction*, then provide the command output below
+as material for analysis.
 
-Repo ini adalah **distribusi Baileys yang dipelihara sendiri**. Jangan pernah
-membandingkannya dengan WhiskeySockets/Baileys atau fork lain, jangan menyalin
-kode dari sana, dan jangan berasumsi perilaku upstream berlaku di sini. Satu-
-satunya sumber kebenaran adalah **bundle JavaScript WhatsApp Web yang live** dan
-kode di repo ini.
+This repo is an **independently maintained Baileys distribution**. Never compare
+it with WhiskeySockets/Baileys or any other fork, never copy code from there,
+and never assume upstream behaviour applies here. The only sources of truth are
+the **live WhatsApp Web JavaScript bundle** and the code in this repo.
 
 ---
 
-## 1. Aturan keras
+## 1. Hard rules
 
-Langgar salah satu dari ini dan hasil kerjamu tidak bisa dipakai.
+Break any of these and your work cannot be used.
 
-1. **Jangan pernah mengarang temuan.** Setiap klaim tentang WhatsApp Web harus
-   berasal dari string yang benar-benar kamu temukan di bundle. Kalau kamu tidak
-   menemukannya, katakan "tidak ditemukan", bukan "kemungkinan besar".
-2. **Ekstraktor yang menghasilkan nol baris bukan bukti bahwa tidak ada
-   perubahan.** Sebelum menyimpulkan "tidak ada X baru", pastikan dulu ekstraktor
-   X memang menghasilkan data pada kedua bundle. Laporan dari `wa:update` sudah
-   mencantumkan `Total sekarang` untuk setiap permukaan — kalau totalnya 0,
-   ekstraktornya rusak, bukan WhatsApp-nya yang diam.
-3. **Jangan bump versi kalau `verify:proto` gagal.** Round-trip encoder adalah
-   pengaman terakhir terhadap field protobuf yang salah nomor atau salah tipe.
-4. **Jangan menambah field protobuf secara manual.** Pakai `npm run sync:proto`.
-   Skrip itu aditif dan idempoten; tangan manusia pernah membuat field ganda
-   (`faviconMmsMetadata` vs `faviconMMSMetadata` di field 33) yang hanya
-   ketahuan karena round-trip test. Sejak revisi `1047020237` skrip ini juga
-   membangkitkan anggota baru `Message` — dulu ia menyerah di situ dan menyuruh
-   regenerasi manual. Setiap anggota `Message` adalah proto3 optional, yaitu
-   oneof sintetis beranggota satu, bentuk yang sama persis dengan field
-   opsional di tipe lain; yang dulu kurang cuma spec-nya, karena `diffBundle`
-   melaporkan field `Message` hanya sebagai nama dan nomor. Sekarang spec itu
-   diambil dari `bundle.specs.get('Message')` lalu masuk ke codegen yang sama.
-5. **Kode yang kamu tulis tidak boleh memakai komentar `//` atau `/** */`**
-   kecuali komentar itu menjelaskan sesuatu yang benar-benar tidak terbaca dari
-   kodenya. Dokumen markdown berbahasa Indonesia bebas dari aturan ini.
-6. **Commit langsung ke `main`.** Jangan membuat branch baru, jangan membuka PR,
-   kecuali diminta eksplisit.
-7. **Identitas commit** harus milik pemilik repo, bukan milik agen:
+1. **Never invent findings.** Every claim about WhatsApp Web must come from a
+   string you actually found in the bundle. If you did not find it, say "not
+   found", not "most likely".
+2. **An extractor returning zero lines is not proof that nothing changed.**
+   Before concluding "there is no new X", make sure extractor X really produces
+   data on both bundles. The `wa:update` report includes `Current total` for
+   every surface — if a total is 0, the extractor is broken, not WhatsApp.
+3. **Never bump the version if `verify:proto` fails.** The round-trip encoder
+   is the last guard against a protobuf field with the wrong number or type.
+4. **Never add protobuf fields by hand.** Use `npm run sync:proto`. That script
+   is additive and idempotent; a human once created duplicate fields
+   (`faviconMmsMetadata` vs `faviconMMSMetadata` at field 33) that only the
+   round-trip test caught. Since revision `1047020237` the script also
+   generates new `Message` members — it used to give up there and ask for
+   manual regeneration. Every `Message` member is a proto3 optional, i.e. a
+   synthetic oneof with a single member, exactly the same shape as an optional
+   field on any other type; what used to be missing was only its spec, because
+   `diffBundle` reports `Message` fields as just a name and a number. The spec
+   is now taken from `bundle.specs.get('Message')` and fed into the same
+   codegen.
+5. **Code you write must not use `//` or `/** */` comments** unless the comment
+   explains something that truly cannot be read from the code itself. Markdown
+   documents are exempt from this rule.
+6. **Commit on the working branch.** Do not create extra branches or open a PR
+   unless explicitly asked.
+7. **Commit identity must belong to the repo owner, not the agent:**
    ```
    git -c commit.gpgsign=false \
-       -c user.name="RexxHayanasi Pengen S.Kom" \
-       -c user.email="150516773+rexxzyid@users.noreply.github.com" \
-       commit -am "<pesan>"
+       -c user.name="SAHAN OFC" \
+       -c user.email="176169758+Shan-droid770@users.noreply.github.com" \
+       commit -am "<message>"
    ```
-   Tanpa trailer `Co-Authored-By`, tanpa menyebut model atau alat apa pun di
-   pesan commit.
+   No `Co-Authored-By` trailer, and no mention of any model or tool in the
+   commit message.
 
 ---
 
-## 2. Alur kerja: satu perintah
+## 2. Workflow: one command
 
 ```bash
 npm run wa:update
 ```
 
-Skrip ini melakukan seluruh rantai kerja:
+That script runs the entire chain:
 
-1. Membaca revisi yang terpasang di `lib/Defaults/index.js`.
-2. Mengambil revisi live dari `https://web.whatsapp.com/sw.js`.
-3. Mengunduh seluruh chunk bundle (±540 file, ±80 MB) ke `.wa-bundle/<revisi>/`.
-   Kalau snapshot revisi itu sudah ada, dipakai ulang tanpa mengunduh.
-4. Mem-parse spesifikasi protobuf dari bundle dan membandingkannya dengan
+1. Reads the pinned revision from `src/Defaults/index.js`.
+2. Fetches the live revision from `https://web.whatsapp.com/sw.js`.
+3. Downloads the whole chunk bundle (about 540 files, about 80 MB) into
+   `.wa-bundle/<revision>/`. If a snapshot for that revision already exists,
+   it is reused without downloading.
+4. Parses the protobuf specs out of the bundle and compares them with
    `WAProto/index.d.ts`.
-5. Membandingkan snapshot baru dengan snapshot revisi sebelumnya di seluruh
-   permukaan protokol.
-6. Menjalankan round-trip encoder atas ±2870 field.
-7. Menulis `.wa-bundle/report.md` dan `.wa-bundle/report.json`.
+5. Compares the new snapshot with the previous revision's snapshot across
+   every protocol surface.
+6. Runs a round-trip encoder over roughly 2870 fields.
+7. Writes `.wa-bundle/report.md` and `.wa-bundle/report.json`.
 
-Opsi:
+Options:
 
-| Opsi | Arti |
+| Option | Meaning |
 |---|---|
-| `--apply` | Bump revisi terpasang, tapi hanya kalau kesimpulannya `bump-only` atau `bump-and-review` |
-| `--cache <dir>` | Lokasi cache snapshot (default `.wa-bundle/`) |
-| `--out <dir>` | Lokasi file laporan |
-| `--keep <n>` | Jumlah snapshot yang disimpan (minimum 2, default 3) |
+| `--apply` | Bump the pinned revision, but only when the verdict is `bump-only` or `bump-and-review` |
+| `--cache <dir>` | Snapshot cache location (default `.wa-bundle/`) |
+| `--out <dir>` | Report output location |
+| `--keep <n>` | Number of snapshots to keep (minimum 2, default 3) |
 
-Perintah pendukung:
+Supporting commands:
 
-| Perintah | Kegunaan |
+| Command | Purpose |
 |---|---|
-| `npm run wa:diff -- <dir-lama> <dir-baru>` | Diff dua snapshot saja |
-| `npm run check:proto` | Cek celah protobuf saja |
-| `npm run sync:proto` | Tambahkan field protobuf yang hilang ke WAProto |
-| `npm run verify:proto` | Round-trip encoder saja |
-| `npm run verify:mex` | Cocokkan setiap query `w:mex` dengan persisted query di bundle |
-| `npm run fetch:bundle -- <dir>` | Unduh bundle mentah ke direktori |
+| `npm run wa:diff -- <old-dir> <new-dir>` | Diff two snapshots only |
+| `npm run check:proto` | Check for protobuf gaps only |
+| `npm run sync:proto` | Add missing protobuf fields to WAProto |
+| `npm run verify:proto` | Round-trip encoder only |
+| `npm run verify:mex` | Match every `w:mex` query with the persisted queries in the bundle |
+| `npm run fetch:bundle -- <dir>` | Download the raw bundle into a directory |
 
-Variabel lingkungan `PROTO_BUNDLE_DIR` membuat semua skrip membaca dari
-direktori lokal, dan `PROTO_OFFLINE=1` melewati pengambilan revisi live —
-berguna kalau jaringan diblokir.
+The `PROTO_BUNDLE_DIR` environment variable makes every script read from a
+local directory, and `PROTO_OFFLINE=1` skips the live revision fetch — useful
+when the network is blocked.
 
-> **Catatan rollout.** `sw.js` dan CDN chunk bisa berbeda pendapat saat rilis
-> sedang digelar bertahap: `sw.js` sudah mengumumkan revisi baru sementara
-> chunk yang dilayani masih revisi lama. Laporan membedakan keduanya lewat
-> `Revisi live` (yang diumumkan) dan `Revisi yang dianalisis` (yang benar-benar
-> terunduh). Semua kesimpulan — termasuk `--apply` — memakai revisi yang
-> dianalisis, karena revisi yang bundle-nya belum pernah dibaca tidak boleh
-> ikut dibump.
+> **Rollout note.** `sw.js` and the chunk CDN can disagree while a release is
+> being rolled out gradually: `sw.js` already advertises the new revision while
+> the chunks being served are still the old one. The report distinguishes them
+> as `Live revision` (advertised) and `Analysed revision` (actually
+> downloaded). Every conclusion — including `--apply` — uses the analysed
+> revision, because a revision whose bundle has never been read must not be
+> bumped.
 
-> **Catatan jaringan.** Di sebagian lingkungan, `fetch` bawaan Node ditolak
-> `403` oleh web.whatsapp.com sementara `curl` lolos. `script/protobundle.js`
-> sudah otomatis jatuh ke `curl` ketika itu terjadi, jadi kamu tidak perlu
-> menanganinya sendiri. Kalau keduanya gagal, laporkan apa adanya — jangan
-> mematikan verifikasi TLS dan jangan menebak isi bundle.
+> **Network note.** In some environments Node's built-in `fetch` is rejected
+> with `403` by web.whatsapp.com while `curl` succeeds. `script/protobundle.js`
+> already falls back to `curl` automatically when that happens, so you do not
+> need to handle it yourself. If both fail, report it as it is — never disable
+> TLS verification and never guess the contents of the bundle.
 
 ---
 
-## 3. Membaca kesimpulan
+## 3. Reading the verdict
 
-`report.json` berisi field `verdict` dengan salah satu nilai berikut.
+`report.json` contains a `verdict` field with one of these values.
 
-| Verdict | Artinya | Tindakanmu |
+| Verdict | Meaning | Your action |
 |---|---|---|
-| `no-change` | Revisi live sama dengan yang terpasang | Tidak ada. Laporkan saja. |
-| `bump-only` | Revisi naik, tidak ada permukaan protokol yang berubah | Bump versi, commit `chore: WA update, client revision <n>` |
-| `bump-and-review` | Revisi naik **dan** ada permukaan protokol yang berubah | Baca diff-nya dulu. Putuskan apa yang perlu diterapkan ke fork, baru bump. |
-| `needs-work` | Ada field protobuf yang belum ada di WAProto | `npm run sync:proto`, lalu `npm run verify:proto`, lalu ulangi `wa:update`. Kalau skrip menolak karena spec sebuah field tidak ada di bundle, itu bug ekstraktor — jangan tambal tangan. |
-| `blocked` | Round-trip encoder gagal | **Jangan bump.** Cari tahu field mana yang rusak dari output verifikasi. |
+| `no-change` | Live revision equals the pinned one | Nothing. Just report it. |
+| `bump-only` | Revision went up, no protocol surface changed | Bump the version, commit `chore: WA update, client revision <n>` |
+| `bump-and-review` | Revision went up **and** a protocol surface changed | Read the diff first. Decide what has to be applied to the fork, then bump. |
+| `needs-work` | WAProto is missing protobuf fields | `npm run sync:proto`, then `npm run verify:proto`, then rerun `wa:update`. If the script refuses because a field's spec is missing from the bundle, that is an extractor bug — do not patch it by hand. |
+| `blocked` | Round-trip encoder failed | **Do not bump.** Find the broken field from the verification output. |
 
 ---
 
-## 4. Permukaan mana yang penting
+## 4. Which surfaces matter
 
-Ini bagian yang paling sering disalahpahami. Bundle WhatsApp Web sebagian besar
-berisi kode antarmuka yang **tidak bisa** memengaruhi klien Baileys. Yang
-menentukan apakah sebuah update relevan adalah apakah ia menyentuh apa yang
-dikirim ke server.
+This is the part that is most often misunderstood. Most of the WhatsApp Web
+bundle is interface code that **cannot** affect a Baileys client. What decides
+whether an update is relevant is whether it touches what is sent to the server.
 
-**Penting — kalau ini berubah, fork mungkin perlu diubah:**
+**Important — if this changes, the fork may need to change:**
 
-| Permukaan | Kenapa penting |
+| Surface | Why it matters |
 |---|---|
-| Spesifikasi protobuf | Isi pesan. Field baru berarti fitur pesan baru. |
-| Tag stanza (`smax("...")`) | Bentuk elemen XMPP yang dikirim/diterima |
-| Atribut stanza | Atribut baru pada stanza yang sudah ada sering berarti perubahan perilaku |
-| `xmlns` | Namespace query baru berarti kelompok fitur baru |
-| Operasi MEX | GraphQL persisted query — id-nya harus cocok persis |
-| Path media (`/mms/…`) | Endpoint upload/download |
+| Protobuf specs | Message contents. A new field means a new message feature. |
+| Stanza tags (`smax("...")`) | The shape of the XMPP elements sent and received |
+| Stanza attributes | A new attribute on an existing stanza often means a behaviour change |
+| `xmlns` | A new query namespace means a new feature group |
+| MEX operations | GraphQL persisted queries — their ids must match exactly |
+| Media paths (`/mms/…`) | Upload/download endpoints |
 
-**Tidak penting — abaikan, jangan dilaporkan sebagai "update":**
+**Not important — ignore, do not report as an "update":**
 
-- Modul React/UI (`*.react`), string terjemahan, ikon, animasi.
-- Modul telemetri: QPL, Flipper, Sapienz, `QuickLogEvents`, nama modul logging
-  seperti `world_remixing`.
-- Encoder media sisi klien (mozjpeg WASM, OffscreenCanvas, thumbnail generator).
-  Ini mengubah cara browser meng-encode gambar, bukan apa yang dikirim.
-- Penyimpanan lokal browser (OPFS, CacheStorage, IndexedDB).
-- AB props / gating. Ini hanya menyalakan fitur di UI WhatsApp Web sendiri, dan
-  **tidak** membatasi apa yang boleh dikirim klien lain. Pernah ada kekeliruan
-  di repo ini yang menyimpulkan "poll foto hanya untuk channel" dari AB prop
-  `channel_photo_poll_*`; itu salah, dan dibuktikan salah oleh dump relay asli.
+- React/UI modules (`*.react`), translation strings, icons, animations.
+- Telemetry modules: QPL, Flipper, Sapienz, `QuickLogEvents`, logging module
+  names such as `world_remixing`.
+- Client-side media encoders (mozjpeg WASM, OffscreenCanvas, thumbnail
+  generator). These change how the browser encodes images, not what is sent.
+- Browser-local storage (OPFS, CacheStorage, IndexedDB).
+- AB props / gating. These only enable features inside WhatsApp Web's own UI
+  and do **not** restrict what another client may send. This repo once
+  mistakenly concluded "photo polls are channels only" from the AB prop
+  `channel_photo_poll_*`; that was wrong, and a real relay dump proved it.
 
-Kolom `Menyentuh protokol` di laporan sudah menerapkan pembagian ini secara
-otomatis, tapi kamu tetap harus membaca daftar modul barunya untuk memastikan
-tidak ada yang lolos klasifikasi.
-
----
-
-## 5. Kalau ada yang benar-benar berubah
-
-Urutan yang terbukti bekerja:
-
-1. **Temukan definisinya di bundle.** Cari nama modul `__d("Nama"` lalu baca
-   badan modulnya utuh. Jangan menyimpulkan dari potongan 200 karakter.
-2. **Telusuri ke pemanggil konkret.** Nilai sebuah argumen baru berarti apa-apa
-   hanya kalau kamu tahu nilai yang benar-benar dilewatkan. Kalau `grep` hanya
-   menemukan definisinya, kamu belum selesai — cari komponen UI yang
-   memanggilnya.
-3. **Bandingkan dengan implementasi fork**, elemen per elemen, atribut per
-   atribut, termasuk urutan anak elemen.
-4. **Terapkan perubahan seminimal mungkin**, lalu jalankan `npm run verify:proto`.
-5. **Laporkan yang tidak bisa kamu buktikan.** Kalau sebuah perbaikan mungkin
-   tidak menyelesaikan masalah yang dilaporkan pengguna, katakan begitu.
+The `Touches the protocol` column in the report already applies this split
+automatically, but you should still read the list of new modules to make sure
+nothing escaped classification.
 
 ---
 
-## 6. Jebakan yang sudah pernah menjebak
+## 5. If something really did change
 
-Daftar ini berasal dari kesalahan nyata di repo ini. Baca sebelum mulai.
+The order that has proven to work:
 
-- **Nama daun yang bertabrakan.** Dua tipe protobuf bisa punya nama akhir sama
-  di namespace berbeda. Perbandingan harus memakai nama berkualifikasi penuh dan
-  tidak peka huruf besar-kecil.
-- **Nama snake_case di bundle vs camelCase di WAProto.** Normalisasi dulu
-  sebelum membandingkan.
-- **Kata kunci yang dikutip di `.d.ts`** (`"static"?:`) lolos dari regex naif.
-- **proto3 menghilangkan nilai default.** Field boolean bernilai `false` tidak
-  dikirim WhatsApp. Fork ini pernah mengirim field 10 dan 11 sebagai `false`
-  eksplisit dan menghasilkan payload 50 byte melawan 46 byte milik WhatsApp,
-  yang membuat poll foto tidak tampil.
-- **Perbedaan tipe di kawat.** `'0'` (string) dan `new Uint8Array(1)` (satu byte
-  nol) adalah dua nilai berbeda: `0x30` melawan `0x00`.
-- **Normalisasi nomor telepon.** Layar WhatsApp Web selalu menyusun nomor
-  sebagai kode negara + nomor nasional dalam digit murni. Apa pun yang kamu
-  terima dari pengguna harus dinormalisasi sebelum masuk ke JID.
-- **`getMessage` bukan satu-satunya sumber.** Untuk kirim ulang, cache internal
-  socket lebih dapat dipercaya.
+1. **Find its definition in the bundle.** Search for the module name
+   `__d("Name"` and read the whole module body. Do not draw conclusions from a
+   200-character snippet.
+2. **Trace it to a concrete caller.** A new argument value means nothing unless
+   you know the value actually passed. If `grep` only finds the definition, you
+   are not done — find the UI component that calls it.
+3. **Compare with the fork's implementation**, element by element, attribute by
+   attribute, including the order of child elements.
+4. **Apply the smallest possible change**, then run `npm run verify:proto`.
+5. **Report what you could not prove.** If a fix might not solve the issue the
+   user reported, say so.
 
 ---
 
-## 7. Checklist sebelum push
+## 6. Traps that have caught us before
 
-- [ ] `npm run wa:update` selesai dan verdict-nya dipahami
-- [ ] `npm run verify:proto` lulus
-- [ ] `npm run verify:mex` lulus kalau kamu menyentuh `lib/Socket` atau `lib/Types/Mex.js`
-- [ ] `node --check` lolos untuk setiap file yang disentuh
-- [ ] Tidak ada file di `.wa-bundle/` yang ikut ter-commit
-- [ ] Pesan commit menjelaskan **kenapa**, bukan hanya **apa**
-- [ ] Commit memakai identitas pemilik repo, langsung ke `main`
-- [ ] Laporan ke pengguna memisahkan dengan jelas: apa yang **terbukti**, apa
-      yang **diasumsikan**, dan apa yang **tidak bisa dipastikan**
+This list comes from real mistakes in this repo. Read it before starting.
 
-Format pesan commit yang dipakai repo ini:
+- **Colliding leaf names.** Two protobuf types can share the same final name in
+  different namespaces. Comparisons must use fully qualified names and be
+  case-insensitive.
+- **snake_case names in the bundle vs camelCase in WAProto.** Normalise before
+  comparing.
+- **Quoted keywords in `.d.ts`** (`"static"?:`) slip past naive regexes.
+- **proto3 drops default values.** A boolean field with value `false` is not
+  sent by WhatsApp. This fork once sent fields 10 and 11 as explicit `false`
+  and produced a 50-byte payload against WhatsApp's 46 bytes, which made photo
+  polls fail to render.
+- **Wire type differences.** `'0'` (string) and `new Uint8Array(1)` (one zero
+  byte) are different values: `0x30` versus `0x00`.
+- **Phone number normalisation.** WhatsApp Web always assembles a number as
+  country code + national number in plain digits. Anything you receive from a
+  user must be normalised before it becomes a JID.
+- **`getMessage` is not the only source.** For resending, the socket's internal
+  cache is more reliable.
+
+---
+
+## 7. Checklist before pushing
+
+- [ ] `npm run wa:update` finished and its verdict is understood
+- [ ] `npm run verify:proto` passed
+- [ ] `npm run verify:mex` passed if you touched `src/Socket` or `src/Types/Mex.js`
+- [ ] `node --check` passes for every file you touched
+- [ ] No files from `.wa-bundle/` were committed
+- [ ] The commit message explains **why**, not only **what**
+- [ ] The commit uses the repo owner's identity
+- [ ] Your report to the user clearly separates what is **proven**, what is
+      **assumed**, and what **cannot be confirmed**
+
+Commit message format used by this repo:
 
 ```
 chore: WA update, client revision 1045732124
 
-fix(<area>): <ringkasan satu baris, huruf kecil>
+fix(<area>): <one-line lowercase summary>
 
-<paragraf yang menjelaskan bukti dari bundle dan alasan perubahan>
+<paragraph explaining the evidence from the bundle and the reason for the change>
 ```

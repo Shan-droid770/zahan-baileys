@@ -41,8 +41,8 @@ test('external-ad-reply', async () => {
     {
         const { options } = collect();
         const card = cardOf(await generateWAMessageContent({
-            text: 'halo',
-            externalAdReply: { title: 'Judul', body: 'Isi', url: 'https://example.com/artikel', thumbnail: Buffer.alloc(64, 7) }
+            text: 'hello',
+            externalAdReply: { title: 'Title', body: 'Isi', url: 'https://example.com/artikel', thumbnail: Buffer.alloc(64, 7) }
         }, options));
 
         assert.equal(card.sourceUrl, 'https://example.com/artikel', 'the link is still where the card points');
@@ -55,9 +55,9 @@ test('external-ad-reply', async () => {
     {
         const { options } = collect();
         const card = cardOf(await generateWAMessageContent({
-            text: 'halo',
+            text: 'hello',
             externalAdReply: {
-                title: 'Judul',
+                title: 'Title',
                 url: 'https://example.com/artikel',
                 thumbnailUrl: 'https://cdn.example.com/pic.jpg',
                 mediaUrl: 'https://cdn.example.com/pic.jpg'
@@ -72,13 +72,13 @@ test('external-ad-reply', async () => {
     /** With no picture at all the card is flat, which is worth saying out loud. */
     {
         const { warnings, options } = collect();
-        await generateWAMessageContent({ text: 'halo', externalAdReply: { title: 'Judul' } }, options);
+        await generateWAMessageContent({ text: 'hello', externalAdReply: { title: 'Title' } }, options);
         assert.ok(warnings.some(message => /no thumbnail and no thumbnailUrl/.test(message)));
 
         const quiet = collect();
         await generateWAMessageContent({
-            text: 'halo',
-            externalAdReply: { title: 'Judul', thumbnail: Buffer.alloc(8, 1) }
+            text: 'hello',
+            externalAdReply: { title: 'Title', thumbnail: Buffer.alloc(8, 1) }
         }, quiet.options);
         assert.equal(quiet.warnings.some(message => /no thumbnail/.test(message)), false);
     }
@@ -87,7 +87,7 @@ test('external-ad-reply', async () => {
     {
         const { options } = collect();
         await assert.rejects(
-            generateWAMessageContent({ text: 'halo', externalAdReply: { thumbnail: 'https://cdn.example.com/pic.jpg' } }, options),
+            generateWAMessageContent({ text: 'hello', externalAdReply: { thumbnail: 'https://cdn.example.com/pic.jpg' } }, options),
             /Thumbnail must in buffer type/
         );
     }
@@ -115,20 +115,20 @@ test('rich-link', async () => {
     {
         const content = await generateWAMessageContent({
             richLink: {
-                text: 'dengerin ini',
+                text: 'listen to this',
                 url: 'https://example.com/track',
-                title: 'Judul Lagu',
-                description: 'Penyanyi',
+                title: 'Song Title',
+                description: 'Singer',
                 image: cover
             }
         }, options);
         const text = content.extendedTextMessage;
 
         assert.equal(text.matchedText, 'https://example.com/track');
-        assert.equal(text.title, 'Judul Lagu');
-        assert.equal(text.description, 'Penyanyi');
+        assert.equal(text.title, 'Song Title');
+        assert.equal(text.description, 'Singer');
         assert.ok(text.text.includes('https://example.com/track'), 'the link has to be in the body or nothing renders');
-        assert.ok(text.text.startsWith('dengerin ini'), 'and the caller keeps their own words');
+        assert.ok(text.text.startsWith('listen to this'), 'and the caller keeps their own words');
         assert.equal(text.contextInfo?.externalAdReply, undefined, 'nothing here goes through the suppressed field');
         assert.ok(text.jpegThumbnail.length > 0, 'the inline copy is what shows before the download finishes');
 
@@ -146,7 +146,7 @@ test('rich-link', async () => {
     {
         uploads.length = 0;
         const content = await generateWAMessageContent({
-            richLink: { url: 'https://example.com/a', title: 'Kecil', image: cover, large: false }
+            richLink: { url: 'https://example.com/a', title: 'Small', image: cover, large: false }
         }, options);
         const text = content.extendedTextMessage;
 
@@ -159,7 +159,7 @@ test('rich-link', async () => {
 
     {
         await assert.rejects(
-            generateWAMessageContent({ richLink: { title: 'tanpa link' } }, options),
+            generateWAMessageContent({ richLink: { title: 'without link' } }, options),
             /richLink needs a url/
         );
     }
@@ -167,7 +167,7 @@ test('rich-link', async () => {
     {
         uploads.length = 0;
         const content = await generateWAMessageContent({
-            richLink: { url: 'https://example.com/c', title: 'Rusak', image: Buffer.alloc(4096, 3) }
+            richLink: { url: 'https://example.com/c', title: 'Broken', image: Buffer.alloc(4096, 3) }
         }, options);
         const text = content.extendedTextMessage;
 
@@ -180,8 +180,8 @@ test('rich-link', async () => {
     if (hasImageLibrary) {
         uploads.length = 0;
         const content = await generateWAMessageContent({
-            text: 'lihat https://example.com/b',
-            linkPreview: { 'matched-text': 'https://example.com/b', title: 'Judul', image: cover }
+            text: 'see https://example.com/b',
+            linkPreview: { 'matched-text': 'https://example.com/b', title: 'Title', image: cover }
         }, options);
         const text = content.extendedTextMessage;
 
@@ -190,8 +190,8 @@ test('rich-link', async () => {
 
         uploads.length = 0;
         const compact = await generateWAMessageContent({
-            text: 'lihat https://example.com/b',
-            linkPreview: { 'matched-text': 'https://example.com/b', title: 'Judul', image: cover, large: false }
+            text: 'see https://example.com/b',
+            linkPreview: { 'matched-text': 'https://example.com/b', title: 'Title', image: cover, large: false }
         }, options);
         assert.equal(compact.extendedTextMessage.thumbnailDirectPath, undefined, 'and honours the small card there too');
         assert.equal(uploads.length, 0);
@@ -199,12 +199,12 @@ test('rich-link', async () => {
 
     {
         const content = await generateWAMessageContent({
-            text: 'tanpa tautan di badan pesan',
-            linkPreview: { 'matched-text': 'https://example.com/d', title: 'Judul', description: 'Keterangan' }
+            text: 'no link in the message body',
+            linkPreview: { 'matched-text': 'https://example.com/d', title: 'Title', description: 'Description' }
         }, options);
         const text = content.extendedTextMessage;
 
-        assert.equal(text.text, 'tanpa tautan di badan pesan', 'the body is left exactly as written');
+        assert.equal(text.text, 'no link in the message body', 'the body is left exactly as written');
         assert.ok(!text.text.includes('https://'), 'so no link is pasted into the chat');
         assert.equal(text.matchedText, 'https://example.com/d',
             'while isUrlExtendedTextMessage only needs matchedText, description or title to draw the card');
@@ -251,7 +251,7 @@ test('social-preview', async () => {
     {
         assert.equal(buildSocialPreview({ durationSeconds: 30.4 }).linkPreviewMetadata.linkMediaDuration, 30, 'rounded');
         assert.throws(() => buildSocialPreview({ durationSeconds: -1 }), /non-negative/);
-        assert.throws(() => buildSocialPreview({ durationSeconds: 'lama' }), /non-negative/);
+        assert.throws(() => buildSocialPreview({ durationSeconds: 'long' }), /non-negative/);
     }
 
     /** Nothing set produces nothing, rather than an empty node. */
@@ -262,27 +262,27 @@ test('social-preview', async () => {
 
     /** End cards are the tiles after the video. */
     {
-        const card = videoEndCard({ username: 'rexx', caption: 'Next', thumbnailUrl: 'https://t/1.jpg', profilePictureUrl: 'https://t/p.jpg' });
+        const card = videoEndCard({ username: 'sahan', caption: 'Next', thumbnailUrl: 'https://t/1.jpg', profilePictureUrl: 'https://t/p.jpg' });
         assert.deepEqual(card, {
-            username: 'rexx',
+            username: 'sahan',
             caption: 'Next',
             thumbnailImageUrl: 'https://t/1.jpg',
             profilePictureUrl: 'https://t/p.jpg'
         });
-        assert.deepEqual(videoEndCard({ username: 'rexx' }), { username: 'rexx' }, 'the rest is optional');
+        assert.deepEqual(videoEndCard({ username: 'sahan' }), { username: 'sahan' }, 'the rest is optional');
     }
 
     /** It all survives the encoder and reads back. */
     {
         const content = await generateWAMessageContent({
-            text: 'lihat ini https://instagram.com/reel/x',
+            text: 'look at this https://instagram.com/reel/x',
             socialPreview: {
                 postType: SocialMediaPostType.REEL,
                 videoUrl: 'https://cdn.test/v.mp4',
                 videoCaption: 'Caption',
                 muted: true,
                 durationSeconds: 30,
-                endCards: [videoEndCard({ username: 'rexx', caption: 'Next' })]
+                endCards: [videoEndCard({ username: 'sahan', caption: 'Next' })]
             }
         }, withLink);
 
@@ -292,7 +292,7 @@ test('social-preview', async () => {
         const text = decoded.extendedTextMessage;
         assert.equal(text.linkPreviewMetadata.socialMediaPostType, SocialMediaPostType.REEL);
         assert.equal(text.endCardTiles.length, 1);
-        assert.equal(text.endCardTiles[0].username, 'rexx');
+        assert.equal(text.endCardTiles[0].username, 'sahan');
 
         assert.deepEqual(readSocialPreview(decoded), {
             postType: SocialMediaPostType.REEL,
@@ -306,8 +306,8 @@ test('social-preview', async () => {
 
     /** A message that carries none of it reads back as null. */
     {
-        assert.equal(readSocialPreview({ message: { conversation: 'halo' } }), null);
-        assert.equal(readSocialPreview({ message: { extendedTextMessage: { text: 'halo' } } }), null);
+        assert.equal(readSocialPreview({ message: { conversation: 'hello' } }), null);
+        assert.equal(readSocialPreview({ message: { extendedTextMessage: { text: 'hello' } } }), null);
         assert.equal(readSocialPreview(undefined), null);
     }
 
@@ -315,7 +315,7 @@ test('social-preview', async () => {
     {
         const warnings = [];
         await generateWAMessageContent(
-            { text: 'tanpa tautan', socialPreview: { postType: SocialMediaPostType.REEL } },
+            { text: 'without a link', socialPreview: { postType: SocialMediaPostType.REEL } },
             { logger: { debug() {}, info() {}, warn: message => warnings.push(message) }, getUrlInfo: async () => undefined }
         );
         assert.ok(warnings.some(message => /no matched link/.test(message)));
@@ -368,7 +368,7 @@ test('payment-messages', async () => {
                 splitId: 's1',
                 total: 150000,
                 currency: 'IDR',
-                description: 'Makan bareng',
+                description: 'Dinner together',
                 requesterJid: '628@s.whatsapp.net',
                 participants: [
                     { jid: '6281@s.whatsapp.net', amount: 50000 },
@@ -400,7 +400,7 @@ test('payment-messages', async () => {
         const content = await generateWAMessageContent({
             paymentReminder: {
                 reminderId: 'r1',
-                description: 'Sewa',
+                description: 'Rent',
                 amount: 500000,
                 currency: 'IDR',
                 frequency: ReminderFrequency.MONTHLY
@@ -416,8 +416,8 @@ test('payment-messages', async () => {
 
     /** Neither reader claims a message that is not theirs. */
     {
-        assert.equal(readSplitPayment({ message: { conversation: 'halo' } }), null);
-        assert.equal(readPaymentReminder({ message: { conversation: 'halo' } }), null);
+        assert.equal(readSplitPayment({ message: { conversation: 'hello' } }), null);
+        assert.equal(readPaymentReminder({ message: { conversation: 'hello' } }), null);
         assert.equal(readSplitPayment(undefined), null);
     }
 
@@ -431,11 +431,11 @@ test('payment-messages', async () => {
         assert.ok(content.extendedTextMessage, 'the text message is still there');
         assert.equal(roundTrip(content).statusLinkPreviewMetadata.style, 1);
 
-        const bare = await generateWAMessageContent({ text: 'halo', statusLinkPreview: 2 }, options);
+        const bare = await generateWAMessageContent({ text: 'hello', statusLinkPreview: 2 }, options);
         assert.equal(bare.statusLinkPreviewMetadata.style, 2, 'a bare number works too');
 
         await assert.rejects(
-            generateWAMessageContent({ text: 'halo', statusLinkPreview: { style: -1 } }, options),
+            generateWAMessageContent({ text: 'hello', statusLinkPreview: { style: -1 } }, options),
             /non-negative integer/
         );
     }
@@ -697,13 +697,13 @@ test('message-id', async () => {
         assert.equal(id.length, 20);
     }
 
-    const banyak = new Set(Array.from({ length: 500 }, () => generateMessageIDV2('628111@s.whatsapp.net')));
-    assert.equal(banyak.size, 500);
+    const many = new Set(Array.from({ length: 500 }, () => generateMessageIDV2('628111@s.whatsapp.net')));
+    assert.equal(many.size, 500);
 
     const legacy = new Set(Array.from({ length: 500 }, () => generateMessageID()));
     assert.equal(legacy.size, 500);
 
-    for (const id of [...banyak, ...legacy]) {
+    for (const id of [...many, ...legacy]) {
         assert.equal(id, id.toUpperCase());
     }
 });
@@ -731,15 +731,15 @@ test('view-once-text', async () => {
     assert.equal(unwrapped.extendedTextMessage.text, 'rahasia');
     assert.equal(unwrapped.extendedTextMessage.viewOnce, true);
 
-    const v2 = await generateWAMessageContent({ text: 'halo', viewOnceV2: true }, { upload });
+    const v2 = await generateWAMessageContent({ text: 'hello', viewOnceV2: true }, { upload });
     assert.equal(v2.viewOnceMessageV2.message.extendedTextMessage.viewOnce, true);
 
-    const v1 = await generateWAMessageContent({ text: 'halo', viewOnce: true }, { upload });
+    const v1 = await generateWAMessageContent({ text: 'hello', viewOnce: true }, { upload });
     assert.equal(v1.viewOnceMessage.message.extendedTextMessage.viewOnce, true);
 
-    const polos = await generateWAMessageContent({ text: 'biasa' }, { upload });
-    assert.equal(polos.viewOnceMessageV2Extension ?? null, null);
-    assert.equal(polos.extendedTextMessage.viewOnce ?? null, null);
+    const plain = await generateWAMessageContent({ text: 'plain' }, { upload });
+    assert.equal(plain.viewOnceMessageV2Extension ?? null, null);
+    assert.equal(plain.extendedTextMessage.viewOnce ?? null, null);
 });
 
 test('quoted-guard', async () => {
@@ -756,7 +756,7 @@ test('quoted-guard', async () => {
 
     const send = (quoted) => {
         const logger = makeLogger();
-        return generateWAMessage('120363000000000000@g.us', { text: 'halo' }, {
+        return generateWAMessage('120363000000000000@g.us', { text: 'hello' }, {
             upload: async () => ({}),
             logger,
             userJid: '628999:12@s.whatsapp.net',
@@ -782,7 +782,7 @@ test('quoted-guard', async () => {
 
         for (const [name, quoted] of Object.entries(cases)) {
             const { message, logger } = await send(quoted);
-            assert.equal(message.message.extendedTextMessage.text, 'halo', `${name}: the message still goes out`);
+            assert.equal(message.message.extendedTextMessage.text, 'hello', `${name}: the message still goes out`);
             assert.equal(message.message.extendedTextMessage.contextInfo?.stanzaId, undefined, `${name}: without a quote`);
             assert.equal(logger.warnings.length, 1, `${name}: and says so once`);
             assert.match(logger.warnings[0][1], /nothing quotable/);
@@ -803,9 +803,9 @@ test('quoted-guard', async () => {
 
     /** A wrapped quote is normalised first, so the inner content is what gets quoted. */
     {
-        const quoted = { key: key('G'), message: { viewOnceMessageV2: { message: { conversation: 'dalam' } } } };
+        const quoted = { key: key('G'), message: { viewOnceMessageV2: { message: { conversation: 'inside' } } } };
         const { message } = await send(quoted);
-        assert.equal(message.message.extendedTextMessage.contextInfo.quotedMessage.conversation, 'dalam');
+        assert.equal(message.message.extendedTextMessage.contextInfo.quotedMessage.conversation, 'inside');
     }
 
     /** A protocolMessage is a real content type, so quoting one keeps working. */
@@ -818,13 +818,13 @@ test('quoted-guard', async () => {
 
     /** No logger is not a crash either — the guard must not depend on one. */
     {
-        const message = await generateWAMessage('120363000000000000@g.us', { text: 'halo' }, {
+        const message = await generateWAMessage('120363000000000000@g.us', { text: 'hello' }, {
             upload: async () => ({}),
             logger: { info() {}, debug() {}, warn() {}, error() {}, trace() {}, child() { return this } },
             userJid: '628999:12@s.whatsapp.net',
             quoted: { key: key('I') }
         });
-        assert.equal(message.message.extendedTextMessage.text, 'halo');
+        assert.equal(message.message.extendedTextMessage.text, 'hello');
     }
 });
 
@@ -854,7 +854,7 @@ test('scheduled-message', async () => {
     const key = generateRevealKey();
     assert.equal(key.length, SCHEDULED_MSG_REVEAL_KEY_BYTES);
 
-    const original = { conversation: 'pesan terjadwal' };
+    const original = { conversation: 'scheduled message' };
     const encoded = encodeScheduledMessage(original, key);
 
     assert.equal(encoded.encIv.length, SCHEDULED_MSG_REVEAL_KEY_IV_BYTES);
@@ -900,62 +900,62 @@ test('scheduled-message', async () => {
 });
 
 test('reporting-token', async () => {
-    const buat = async (isi) => generateWAMessage('2@s.whatsapp.net', isi, { userJid: '1:5@s.whatsapp.net' });
-    const kunci = (msg) => ({ id: msg.key.id, fromMe: true, remoteJid: '2@s.whatsapp.net' });
+    const make = async (content) => generateWAMessage('2@s.whatsapp.net', content, { userJid: '1:5@s.whatsapp.net' });
+    const keyFor = (msg) => ({ id: msg.key.id, fromMe: true, remoteJid: '2@s.whatsapp.net' });
 
-    const contoh = await buat({ text: 'halo' });
-    assert.ok(contoh.message.messageContextInfo?.messageSecret, 'teks polos harus punya messageSecret');
-    assert.equal(shouldIncludeReportingToken(contoh.message), true);
+    const example = await make({ text: 'hello' });
+    assert.ok(example.message.messageContextInfo?.messageSecret, 'plain text must have a messageSecret');
+    assert.equal(shouldIncludeReportingToken(example.message), true);
 
-    let terbentuk = 0;
+    let produced = 0;
     for (let i = 0; i < 120; i++) {
-        const msg = await buat({ text: i % 2 ? 'halo' : 'halo dunia' });
-        const node = await getMessageReportingToken(proto.Message.encode(msg.message).finish(), msg.message, kunci(msg));
+        const msg = await make({ text: i % 2 ? 'hello' : 'hello world' });
+        const node = await getMessageReportingToken(proto.Message.encode(msg.message).finish(), msg.message, keyFor(msg));
         if (node) {
-            terbentuk++;
+            produced++;
             assert.equal(node.tag, 'reporting');
             assert.equal(node.content[0].tag, 'reporting_token');
             assert.equal(node.content[0].attrs.v, '2');
             assert.equal(node.content[0].content.length, 16);
         }
     }
-    assert.equal(terbentuk, 120, 'protobuf tanpa padding harus selalu menghasilkan token');
+    assert.equal(produced, 120, 'protobuf without padding must always produce a token');
 
-    let denganPadding = 0;
+    let withPadding = 0;
     for (let i = 0; i < 120; i++) {
-        const msg = await buat({ text: 'halo' });
-        if (await getMessageReportingToken(encodeWAMessage(msg.message), msg.message, kunci(msg))) denganPadding++;
+        const msg = await make({ text: 'hello' });
+        if (await getMessageReportingToken(encodeWAMessage(msg.message), msg.message, keyFor(msg))) withPadding++;
     }
-    assert.ok(denganPadding < 120, 'padding acak merusak ekstraksi, itu sebab bug-nya');
+    assert.ok(withPadding < 120, 'random padding breaks extraction, which was the cause of the bug');
 });
 
 test('inline-skdm', async () => {
     const src = readFileSync(new URL('../src/Socket/messages-send.js', import.meta.url), 'utf8');
-    const awal = src.indexOf('let toEncode = patched;');
-    const akhir = src.indexOf('const bytes = encodeWAMessage(toEncode);');
-    assert.ok(awal > 0 && akhir > awal, 'blok inline SKDM harus ada');
-    const blok = src.slice(awal, akhir);
+    const startAt = src.indexOf('let toEncode = patched;');
+    const endAt = src.indexOf('const bytes = encodeWAMessage(toEncode);');
+    assert.ok(startAt > 0 && endAt > startAt, 'inline SKDM block must exist');
+    const blok = src.slice(startAt, endAt);
 
-    assert.ok(blok.includes("config.inlineSenderKeyDistribution !== false"), 'aktif secara default, bisa dimatikan');
-    assert.ok(blok.includes('isGroup'), 'hanya untuk grup');
-    assert.ok(blok.includes('!patched.senderKeyDistributionMessage'), 'jangan timpa SKDM dari pemanggil');
-    assert.ok(blok.includes('hasSenderKey'), 'hanya kalau sender key sudah ada');
-    assert.ok(blok.includes('getSenderKeyDistributionMessage'), 'ambil lewat signalRepository');
-    assert.ok(blok.includes('catch'), 'kegagalan tidak menjatuhkan pengiriman');
+    assert.ok(blok.includes("config.inlineSenderKeyDistribution !== false"), 'enabled by default, can be turned off');
+    assert.ok(blok.includes('isGroup'), 'groups only');
+    assert.ok(blok.includes('!patched.senderKeyDistributionMessage'), 'do not overwrite the caller\'s SKDM');
+    assert.ok(blok.includes('hasSenderKey'), 'only when a sender key already exists');
+    assert.ok(blok.includes('getSenderKeyDistributionMessage'), 'fetch through signalRepository');
+    assert.ok(blok.includes('catch'), 'a failure must not break sending');
 
-    assert.ok(src.includes('reportingMessage = toEncode;'), 'token laporan atas pesan yang benar-benar dikirim');
-    assert.ok(!src.includes('const bytes = encodeWAMessage(patched);'), 'jalur lama tidak tersisa');
+    assert.ok(src.includes('reportingMessage = toEncode;'), 'reporting token for the message actually sent');
+    assert.ok(!src.includes('const bytes = encodeWAMessage(patched);'), 'the old path must be gone');
 
-    const dengan = {
+    const withObj = {
         senderKeyDistributionMessage: { groupId: '1@g.us', axolotlSenderKeyDistributionMessage: Buffer.alloc(4) },
-        extendedTextMessage: { text: 'halo' }
+        extendedTextMessage: { text: 'hello' }
     };
-    assert.equal(getContentType(dengan), 'extendedTextMessage', 'SKDM sebaris tidak boleh dikira tipe konten');
-    assert.equal(getContentType({ conversation: 'halo', senderKeyDistributionMessage: {} }), 'conversation');
+    assert.equal(getContentType(withObj), 'extendedTextMessage', 'inline SKDM must not be mistaken for a content type');
+    assert.equal(getContentType({ conversation: 'hello', senderKeyDistributionMessage: {} }), 'conversation');
 
     const decode = readFileSync(new URL('../src/Utils/decode-wa-message.js', import.meta.url), 'utf8');
-    assert.ok(decode.includes('if (msg.senderKeyDistributionMessage)'), 'penerima memproses SKDM sebaris');
-    assert.ok(decode.includes('processSenderKeyDistributionMessage'), 'lalu meneruskan kontennya');
+    assert.ok(decode.includes('if (msg.senderKeyDistributionMessage)'), 'receiver processes inline SKDM');
+    assert.ok(decode.includes('processSenderKeyDistributionMessage'), 'then forwards its content');
 });
 
 test('spam-report', async () => {
@@ -989,17 +989,17 @@ test('spam-report', async () => {
     assert.equal('subject' in contact.attrs, false);
     assert.equal('is_known_chat' in contact.attrs, false);
     assert.equal('source' in contact.attrs, false);
-    assert.equal(buildSpamListNode('62811111111@s.whatsapp.net', { subject: 'Toko' }).attrs.subject, 'Toko');
+    assert.equal(buildSpamListNode('62811111111@s.whatsapp.net', { subject: 'Shop' }).attrs.subject, 'Shop');
     assert.equal(buildSpamListNode('62811111111@s.whatsapp.net', { isKnownChat: true }).attrs.is_known_chat, 'true');
     assert.equal(buildSpamListNode('62811111111@s.whatsapp.net', { isKnownChat: false }).attrs.is_known_chat, 'false');
 
     /** Every attribute goes on the wire as a string, never a boolean. */
-    for (const value of Object.values(buildSpamListNode('62811111111@s.whatsapp.net', { isKnownChat: true, subject: 'Toko' }).attrs)) {
+    for (const value of Object.values(buildSpamListNode('62811111111@s.whatsapp.net', { isKnownChat: true, subject: 'Shop' }).attrs)) {
         assert.equal(typeof value, 'string');
     }
 
     /** A missing or malformed jid is refused here, not answered by the server. */
-    for (const bad of [undefined, null, '', 'bukan-jid', 62811111111, {}]) {
+    for (const bad of [undefined, null, '', 'not-a-jid', 62811111111, {}]) {
         assert.throws(() => buildSpamListNode(bad), err => {
             assert.equal(err.output.statusCode, 400);
             return true;
@@ -1093,11 +1093,11 @@ test('spam-report-result', async () => {
 });
 
 test('member-label', async () => {
-    const { content, node, label } = buildMemberLabelMessage('12345-67890@g.us', 'Bendahara');
+    const { content, node, label } = buildMemberLabelMessage('12345-67890@g.us', 'Treasurer');
 
-    assert.equal(label, 'Bendahara');
+    assert.equal(label, 'Treasurer');
     assert.equal(content.protocolMessage.type, 30, 'GROUP_MEMBER_LABEL_CHANGE is protocol type 30');
-    assert.equal(content.protocolMessage.memberLabel.label, 'Bendahara');
+    assert.equal(content.protocolMessage.memberLabel.label, 'Treasurer');
     assert.equal(typeof content.protocolMessage.memberLabel.labelTimestamp, 'number');
     assert.deepEqual(node.attrs, { tag_reason: 'user_update', appdata: 'member_tag' });
 
@@ -1110,11 +1110,11 @@ test('member-label', async () => {
     const long = buildMemberLabelMessage('12345-67890@g.us', 'x'.repeat(80));
     assert.equal(long.label.length, MEMBER_LABEL_MAX_LENGTH);
 
-    for (const bad of ['62811111111@s.whatsapp.net', '12345@newsletter', 'bukan-jid', undefined]) {
-        assert.throws(() => buildMemberLabelMessage(bad, 'Bendahara'), err => {
+    for (const bad of ['62811111111@s.whatsapp.net', '12345@newsletter', 'not-a-jid', undefined]) {
+        assert.throws(() => buildMemberLabelMessage(bad, 'Treasurer'), err => {
             assert.equal(err.output.statusCode, 400);
             return true;
-        }, 'menolak ' + JSON.stringify(bad));
+        }, 'rejects ' + JSON.stringify(bad));
     }
 });
 
@@ -1122,35 +1122,35 @@ test('event-time', async () => {
     const options = { logger: { debug() {}, info() {}, warn() {} } };
 
     const dates = await generateWAMessageContent({
-        event: { name: 'rapat', startDate: new Date(1700000000123), endDate: new Date(1700003600456) }
+        event: { name: 'meeting', startDate: new Date(1700000000123), endDate: new Date(1700003600456) }
     }, options);
     assert.equal(dates.eventMessage.startTime, 1700000000);
     assert.equal(dates.eventMessage.endTime, 1700003600, 'endTime used to keep its milliseconds while startTime was floored');
 
     const numbers = await generateWAMessageContent({
-        event: { name: 'rapat', startDate: 1700000000123, endDate: 1700003600 }
+        event: { name: 'meeting', startDate: 1700000000123, endDate: 1700003600 }
     }, options);
     assert.equal(numbers.eventMessage.startTime, 1700000000, 'epoch milliseconds are accepted');
     assert.equal(numbers.eventMessage.endTime, 1700003600, 'and so are seconds');
 
-    const open = await generateWAMessageContent({ event: { name: 'rapat', startDate: new Date(1700000000000) } }, options);
+    const open = await generateWAMessageContent({ event: { name: 'meeting', startDate: new Date(1700000000000) } }, options);
     assert.equal(open.eventMessage.endTime, undefined, 'an event without an end stays open');
 
     await assert.rejects(
-        generateWAMessageContent({ event: { name: 'rapat' } }, options),
+        generateWAMessageContent({ event: { name: 'meeting' } }, options),
         /event startDate must be a Date or a unix timestamp/
     );
 });
 
 test('interactive-mixing', async () => {
     const options = { upload: async () => ({}) };
-    const teks = 'menu';
+    const textValue = 'menu';
 
     const content = await generateWAMessageContent({
-        text: teks,
-        footer: 'Elaina',
-        nativeFlow: [{ text: 'Menu', id: '.menu' }, { text: 'Situs', url: 'https://nixel.dev' }],
-        bloksWidget: { type: 'im_a2ui', uuid: 'u-1', fallback: teks, data: '{"type":"info_card"}' }
+        text: textValue,
+        footer: 'Zahan',
+        nativeFlow: [{ text: 'Menu', id: '.menu' }, { text: 'Site', url: 'https://nixel.dev' }],
+        bloksWidget: { type: 'im_a2ui', uuid: 'u-1', fallback: textValue, data: '{"type":"info_card"}' }
     }, options);
 
     const im = content.interactiveMessage;
@@ -1163,7 +1163,7 @@ test('interactive-mixing', async () => {
     assert.equal(im.bloksWidget.fallback, im.body.text, 'the bubble text is hidden only when it equals the fallback');
 
     const named = await generateWAMessageContent({
-        text: teks,
+        text: textValue,
         nativeFlow: [{ text: 'Menu', id: '.menu' }],
         flowName: 'menu_options'
     }, options);
@@ -1216,7 +1216,7 @@ test('group-status-font', async () => {
     const FONTS = proto.Message.ExtendedTextMessage.FontType;
 
     for (const [name, value] of Object.entries(FONTS)) {
-        const content = await generateWAMessageContent({ text: 'halo grup', groupStatus: true },
+        const content = await generateWAMessageContent({ text: 'hello group', groupStatus: true },
             { ...options, backgroundColor: '#7C3AED', textColor: '#FFEE58', font: value });
         const inner = content.groupStatusMessageV2.message.extendedTextMessage;
         assert.equal(inner.font, value, `${name} has to survive the groupStatusMessageV2 wrap`);
@@ -1235,13 +1235,13 @@ test('group-status-font', async () => {
     assert.equal(inner.backgroundArgb, 0);
     assert.equal(inner.textArgb, 0);
 
-    const image = await generateWAMessageContent({ image: Buffer.from(JPEG_320x200_BASE64, 'base64'), caption: 'halo', groupStatus: true },
+    const image = await generateWAMessageContent({ image: Buffer.from(JPEG_320x200_BASE64, 'base64'), caption: 'hello', groupStatus: true },
         { ...options, backgroundColor: '#7C3AED', font: FONTS.EXO2_EXTRABOLD });
     assert.equal(image.groupStatusMessageV2.message.imageMessage.font, undefined, 'a media caption is not an extendedTextMessage, so it carries no font');
 });
 
 test('future-proof-unwrap', async () => {
-    const inner = { conversation: 'halo' };
+    const inner = { conversation: 'hello' };
 
     for (const key of FUTURE_PROOF_MESSAGE_KEYS) {
         assert.deepEqual(normalizeMessageContent({ [key]: { message: inner } }), inner, `${key} has to unwrap`);
@@ -1319,7 +1319,7 @@ test('airich-namespace', async () => {
 test('toolkit-image-source', async () => {
     const { Toolkit } = await import('../src/index.js');
     const bytes = Buffer.from(JPEG_320x200_BASE64, 'base64');
-    const file = join(tmpdir(), `elaina-toolkit-${Date.now()}.jpg`);
+    const file = join(tmpdir(), `zahan-toolkit-${Date.now()}.jpg`);
     await fs.writeFile(file, bytes);
 
     try {
@@ -1376,9 +1376,9 @@ test('airich-quota-upsell', async () => {
 
     const section = MB.quotaUpsellSection({
         title: 'Meta AI Plus',
-        body: 'Kuota gambarmu habis',
-        bodyLine1: 'Upgrade untuk 100 gambar lagi',
-        bodyLine2: 'Batal kapan saja',
+        body: 'Your image quota is used up',
+        bodyLine1: 'Upgrade for 100 more images',
+        bodyLine2: 'Cancel any time',
         meterUsageType: 'META_AI_IMAGINE',
         benefitType: 'IMAGINE_QUOTA',
         buttons: [MB.quotaUpsellButton({ label: 'Upgrade', action: 'UPGRADE', deeplink: 'https://meta.ai/plus' })]
@@ -1405,7 +1405,7 @@ test('airich-quota-upsell', async () => {
 test('airich-section-typename', async () => {
     const { AIRich } = await import('../src/index.js');
 
-    const bare = { view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'GenAIMarkdownTextUXPrimitive', text: 'halo' } } };
+    const bare = { view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'GenAIMarkdownTextUXPrimitive', text: 'hello' } } };
     assert.equal(AIRich.normalizeSection(bare).__typename, 'GenAIUnifiedResponseSection');
     assert.equal(Object.keys(AIRich.normalizeSection(bare))[0], '__typename', 'the stamp goes first, the way newLayout writes it');
 
@@ -1423,7 +1423,7 @@ test('airich-deep-decode', async () => {
     const unified = {
         response_id: 'r1',
         sections: [
-            { __typename: 'GenAIUnifiedResponseSection', view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'GenAIMarkdownTextUXPrimitive', text: 'halo' } } },
+            { __typename: 'GenAIUnifiedResponseSection', view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'GenAIMarkdownTextUXPrimitive', text: 'hello' } } },
             {
                 __typename: 'GenAIUnifiedResponseSection',
                 view_model: {
@@ -1436,7 +1436,7 @@ test('airich-deep-decode', async () => {
             }
         ],
         embedded_screens: [
-            { title: 'Rincian', content: [{ __typename: 'FOAEmbeddedSingleScreen', sections: [{ view_model: { primitive: { __typename: 'GenAIaeacdsnwHtmlPrimitive', payload: '<b>hi</b>' } } }] }] }
+            { title: 'Details', content: [{ __typename: 'FOAEmbeddedSingleScreen', sections: [{ view_model: { primitive: { __typename: 'GenAIaeacdsnwHtmlPrimitive', payload: '<b>hi</b>' } } }] }] }
         ]
     };
     const msg = { message: { richResponseMessage: { unifiedResponse: { data: Buffer.from(JSON.stringify(unified)).toString('base64') } } } };
@@ -1469,7 +1469,7 @@ const stubUpload = async () => ({ mediaUrl: 'https://mmg.example/x', directPath:
 test('interactive-header-empty-text', async () => {
     const bare = await generateWAMessageContent({
         location: { degreesLatitude: 1, degreesLongitude: 2 },
-        caption: 'Halo',
+        caption: 'Hello',
         nativeFlow: [{ text: 'Menu', id: '.menu' }]
     }, { upload: stubUpload });
     const bareHeader = decodeHeader(bare);
@@ -1479,12 +1479,12 @@ test('interactive-header-empty-text', async () => {
 
     const titled = await generateWAMessageContent({
         location: { degreesLatitude: 1, degreesLongitude: 2 },
-        caption: 'Halo',
-        title: 'Judul',
+        caption: 'Hello',
+        title: 'Title',
         nativeFlow: [{ text: 'Menu', id: '.menu' }]
     }, { upload: stubUpload });
     const titledHeader = decodeHeader(titled);
-    assert.equal(titledHeader.title, 'Judul');
+    assert.equal(titledHeader.title, 'Title');
     assert.equal(Object.hasOwn(titledHeader, 'subtitle'), false);
 });
 
@@ -1497,8 +1497,8 @@ test('carousel-card-header-empty-text', async () => {
     const content = await generateWAMessageContent({
         text: 'Isi',
         cards: [
-            { image, caption: 'Kartu', nativeFlow: [{ text: 'Buka', id: '.a' }] },
-            { image, caption: 'Kartu dua', title: 'Judul', subtitle: 'Sub', nativeFlow: [{ text: 'Buka', id: '.b' }] }
+            { image, caption: 'Card', nativeFlow: [{ text: 'Open', id: '.a' }] },
+            { image, caption: 'Second card', title: 'Title', subtitle: 'Sub', nativeFlow: [{ text: 'Open', id: '.b' }] }
         ]
     }, { upload: stubUpload });
 
@@ -1506,7 +1506,7 @@ test('carousel-card-header-empty-text', async () => {
     const [plain, full] = decoded.interactiveMessage.carouselMessage.cards.map((card) => card.header);
     assert.equal(Object.hasOwn(plain, 'title'), false);
     assert.equal(Object.hasOwn(plain, 'subtitle'), false);
-    assert.equal(full.title, 'Judul');
+    assert.equal(full.title, 'Title');
     assert.equal(full.subtitle, 'Sub');
 });
 
@@ -1530,7 +1530,7 @@ test('carousel-biz-node', () => {
     assert.equal(shouldIncludeBizBinaryNode(carousel), true, 'a carousel whose cards hold native flow buttons needs the biz node');
     assert.equal(shouldIncludeBizBinaryNode({ interactiveMessage: { carouselMessage: { cards: [{ body: { text: 'x' } }] } } }), false);
     assert.equal(shouldIncludeBizBinaryNode({ interactiveMessage: { carouselMessage: { cards: [] } } }), false);
-    assert.equal(shouldIncludeBizBinaryNode({ conversation: 'halo' }), false);
+    assert.equal(shouldIncludeBizBinaryNode({ conversation: 'hello' }), false);
 
     const biz = getBizBinaryNode(carousel);
     assert.equal(biz.tag, 'biz');

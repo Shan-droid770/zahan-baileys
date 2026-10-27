@@ -1,4 +1,4 @@
-/* Elaina Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
+/* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 import { DEFAULT_CONNECTION_CONFIG } from '../Defaults/index.js';
 import { prepareModernMessageContent } from '../Utils/modern-messages.js';
 import { makeNewsletterStatusFetcher, makeNewsletterStatusUpdatesFetcher, makeNewsletterStatusReactionSender, makeNewsletterStatusRevokeSender, makeNewsletterStatusSender } from '../Utils/newsletter-status.js';
@@ -25,7 +25,7 @@ const makeWASocket = (config) => {
                 sock.anchorGuard = createAntiBugGuard(sock, { logger: sock.logger, ...(newConfig.AnchorGuardConfig || {}) });
             })
             .catch((error) => {
-                sock.logger?.warn?.({ error: error.message }, 'AnchorGuard diaktifkan tapi paket @rexxhayanasi/elaina-anchorguard belum terpasang. Jalankan: npm install @rexxhayanasi/elaina-anchorguard');
+                sock.logger?.warn?.({ error: error.message }, 'AnchorGuard is enabled but @rexxhayanasi/elaina-anchorguard is not installed. Run: npm install @rexxhayanasi/elaina-anchorguard');
             });
     }
     return sock;

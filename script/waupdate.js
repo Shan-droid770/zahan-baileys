@@ -68,7 +68,7 @@ const snapshotDirs = () => readdirSync(cacheDir, { withFileTypes: true })
 const step = message => console.log(`• ${message}`)
 
 const pinned = pinnedRevision()
-step(`Revisi terpasang di repo: ${pinned}`)
+step(`Pinned revision in repo: ${pinned}`)
 
 /**
  * WhatsApp rolls a release out gradually, so different edge nodes answer with
@@ -80,66 +80,66 @@ for (let attempt = 0; attempt < 5; attempt++) samples.push(await liveRevision())
 const observed = snapshotDirs().map(entry => entry.revision)
 const live = Math.max(...samples, pinned, ...observed)
 const spread = [...new Set(samples)].sort((a, b) => b - a)
-step(`Revisi live WhatsApp Web: ${live}`)
-if (spread.length > 1) step(`  beberapa revisi dilayani bersamaan: ${spread.join(', ')}`)
-if (live > Math.max(...samples)) step(`  sampel kali ini maksimum ${Math.max(...samples)}, memakai yang lebih tinggi dan pernah teramati`)
+step(`Live WhatsApp Web revision: ${live}`)
+if (spread.length > 1) step(`  several revisions served at once: ${spread.join(', ')}`)
+if (live > Math.max(...samples)) step(`  this sample tops out at ${Math.max(...samples)}, using the higher revision observed earlier`)
 
 let current = snapshotDirs().find(entry => entry.revision === live)
 
 if (current) {
-    step(`Snapshot revisi ${live} sudah ada di ${current.path}, memakai ulang`)
+    step(`Revision ${live} snapshot already exists at ${current.path}, reusing it`)
 }
 else {
     const staging = join(cacheDir, '.staging')
     rmSync(staging, { recursive: true, force: true })
-    step(`Mengunduh bundle revisi ${live}`)
+    step(`Downloading bundle revision ${live}`)
     const meta = await snapshotBundle({
         directory: staging,
         onProgress: (done, total) => {
             if (done % 100 === 0 || done === total) step(`  ${done}/${total} chunk`)
         }
     })
-    if (meta.failed) step(`  ${meta.failed} chunk gagal diunduh`)
+    if (meta.failed) step(`  ${meta.failed} chunks failed to download`)
     if (meta.revision !== live) {
-        step(`  chunk yang dilayani ternyata revisi ${meta.revision}, bukan ${live}`)
+        step(`  chunks served are actually revision ${meta.revision}, not ${live}`)
     }
     const target = join(cacheDir, String(meta.revision))
     rmSync(target, { recursive: true, force: true })
     renameSync(staging, target)
-    step(`  snapshot disimpan di ${target}`)
+    step(`  snapshot saved at ${target}`)
     current = { revision: meta.revision, path: target }
 }
 
 const analyzed = current.revision
 const previous = snapshotDirs().filter(entry => entry.path !== current.path && entry.revision !== analyzed).pop()
-if (analyzed !== live) step(`Revisi yang benar-benar dianalisis: ${analyzed}`)
+if (analyzed !== live) step(`Revision actually analysed: ${analyzed}`)
 
-step('Membaca spesifikasi protobuf dari bundle')
+step('Reading protobuf specs from the bundle')
 const bundle = await loadBundle({ directory: current.path })
 const fork = readForkInterfaces()
 const { missingMessage, gaps, undeclared } = diffBundle(bundle, fork)
 const protoGaps = missingMessage.length + gaps.length
 
-step(`Field Message: bundle ${bundle.messageFields.size}, WAProto ${fork.get('Message').size}`)
-step(`Field yang belum ada di WAProto: ${protoGaps}`)
+step(`Message fields: bundle ${bundle.messageFields.size}, WAProto ${fork.get('Message').size}`)
+step(`Fields missing from WAProto: ${protoGaps}`)
 
 let snapshotDiff
 if (previous) {
-    step(`Membandingkan dengan snapshot revisi ${previous.revision}`)
+    step(`Comparing with revision ${previous.revision} snapshot`)
     try {
         snapshotDiff = await diffSnapshots(previous.path, current.path)
     }
     catch (error) {
-        step(`  snapshot ${previous.revision} tidak terbaca (${error.message}), diff antar-revisi dilewati`)
+        step(`  snapshot ${previous.revision} could not be read (${error.message}), skipping cross-revision diff`)
         snapshotDiff = undefined
     }
 }
 else {
-    step('Belum ada snapshot lama, diff antar-revisi dilewati')
+    step('No older snapshot yet, skipping cross-revision diff')
 }
 
 const run = async (label, file, env = {}) => {
-    step(`Menjalankan ${label}`)
+    step(`Running ${label}`)
     try {
         const { stdout } = await execFileAsync(process.execPath, [join(root, 'script', file)], {
             cwd: root,
@@ -157,7 +157,7 @@ const verify = await run('verifyproto (round-trip encoder)', 'verifyproto.js', {
     PROTO_BUNDLE_DIR: current.path,
     PROTO_OFFLINE: '1'
 })
-step(verify.ok ? `  ${verify.output.split('\n').pop()}` : '  GAGAL')
+step(verify.ok ? `  ${verify.output.split('\n').pop()}` : '  FAILED')
 
 const protocolTouched = snapshotDiff ? snapshotDiff.protocolTouched : protoGaps > 0
 
@@ -168,39 +168,39 @@ else if (analyzed !== pinned) verdict = protocolTouched ? 'bump-and-review' : 'b
 else verdict = 'no-change'
 
 const VERDICTS = {
-    'no-change': 'Revisi sudah sama dengan yang terpasang. Tidak ada yang perlu dikerjakan.',
-    'bump-only': 'Revisi naik tapi tidak ada permukaan protokol yang berubah. Cukup bump versi.',
-    'bump-and-review': 'Revisi naik DAN ada permukaan protokol yang berubah. Baca diff sebelum bump.',
-    'needs-work': 'Ada field protobuf yang belum ada di WAProto. Jalankan sync:proto lalu verifikasi ulang.',
-    blocked: 'Round-trip encoder gagal. JANGAN bump versi sebelum ini hijau.'
+    'no-change': 'The live revision matches the pinned one. Nothing to do.',
+    'bump-only': 'The revision went up but no protocol surface changed. Just bump the version.',
+    'bump-and-review': 'The revision went up AND a protocol surface changed. Read the diff before bumping.',
+    'needs-work': 'WAProto is missing protobuf fields. Run sync:proto and verify again.',
+    blocked: 'Round-trip encoder failed. Do NOT bump the version until this is green.'
 }
 
 const lines = []
-lines.push('# Laporan update WhatsApp Web')
+lines.push('# WhatsApp Web update report')
 lines.push('')
-lines.push(`- Revisi terpasang: \`${pinned}\``)
-lines.push(`- Revisi live: \`${live}\``)
-lines.push(`- Revisi yang dianalisis: \`${analyzed}\``)
-lines.push(`- Snapshot dipakai: \`${current.path}\``)
-lines.push(`- Snapshot pembanding: \`${previous ? previous.path : 'tidak ada'}\``)
+lines.push(`- Pinned revision: \`${pinned}\``)
+lines.push(`- Live revision: \`${live}\``)
+lines.push(`- Analysed revision: \`${analyzed}\``)
+lines.push(`- Snapshot used: \`${current.path}\``)
+lines.push(`- Comparison snapshot: \`${previous ? previous.path : 'none'}\``)
 lines.push('')
-lines.push(`## Kesimpulan: \`${verdict}\``)
+lines.push(`## Verdict: \`${verdict}\``)
 lines.push('')
 lines.push(VERDICTS[verdict])
 if (analyzed !== live) {
     lines.push('')
-    lines.push(`CDN masih melayani chunk revisi \`${analyzed}\` walau \`sw.js\` mengumumkan \`${live}\`, jadi bundle revisi \`${live}\` belum pernah dibaca dan angka itu tidak dipakai untuk kesimpulan apa pun.`)
+    lines.push(`The CDN still serves revision \`${analyzed}\` chunks even though \`sw.js\` advertises \`${live}\`, so the bundle for revision \`${live}\` has never been read and that number is not used in any conclusion.`)
 }
 lines.push('')
-lines.push('## Pemeriksaan protobuf')
+lines.push('## Protobuf checks')
 lines.push('')
-lines.push(`- Field \`Message\`: bundle ${bundle.messageFields.size}, WAProto ${fork.get('Message').size}`)
-lines.push(`- Field \`Message\` yang hilang: ${missingMessage.length}`)
+lines.push(`- \`Message\` fields: bundle ${bundle.messageFields.size}, WAProto ${fork.get('Message').size}`)
+lines.push(`- Missing \`Message\` fields: ${missingMessage.length}`)
 if (missingMessage.length) for (const [name, id] of missingMessage) lines.push(`  - \`${name}\` (field ${id})`)
-lines.push(`- Tipe dengan field kurang: ${gaps.length}`)
+lines.push(`- Types with missing fields: ${gaps.length}`)
 if (gaps.length) for (const gap of gaps) lines.push(`  - \`${gap.type}\`: ${gap.fields.map(field => field.name).sort().join(', ')}`)
-lines.push(`- Tipe yang tidak dideklarasikan WAProto sama sekali: ${undeclared.length}`)
-lines.push(`- Round-trip encoder: ${verify.ok ? 'lulus' : 'GAGAL'}`)
+lines.push(`- Types not declared in WAProto at all: ${undeclared.length}`)
+lines.push(`- Round-trip encoder: ${verify.ok ? 'passed' : 'FAILED'}`)
 if (!verify.ok) {
     lines.push('')
     lines.push('```')
@@ -213,9 +213,9 @@ if (snapshotDiff) {
     lines.push(renderReport(snapshotDiff).split('\n').slice(1).join('\n'))
 }
 else {
-    lines.push('## Diff antar-revisi')
+    lines.push('## Cross-revision diff')
     lines.push('')
-    lines.push('Dilewati: belum ada snapshot revisi sebelumnya di cache.')
+    lines.push('Skipped: no previous revision snapshot in the cache.')
     lines.push('')
 }
 
@@ -242,21 +242,21 @@ writeFileSync(jsonPath, JSON.stringify({
 console.log('')
 console.log(markdown)
 console.log('')
-step(`Laporan ditulis ke ${markdownPath} dan ${jsonPath}`)
+step(`Report written to ${markdownPath} and ${jsonPath}`)
 
 if (apply) {
     if (verdict === 'bump-only' || verdict === 'bump-and-review') {
         const touched = writePinnedRevision(analyzed)
-        step(touched.length ? `Versi dibump ke ${analyzed} di: ${touched.join(', ')}` : 'Tidak ada file versi yang berubah')
+        step(touched.length ? `Version bumped to ${analyzed} in: ${touched.join(', ')}` : 'No version files changed')
     }
     else {
-        step(`--apply diabaikan: kesimpulannya \`${verdict}\`, bukan bump`)
+        step(`--apply ignored: the verdict is \`${verdict}\`, not a bump`)
     }
 }
 
 const cached = snapshotDirs()
 for (const entry of cached.slice(0, Math.max(0, cached.length - keep))) {
-    step(`Membersihkan snapshot lama ${entry.path}`)
+    step(`Cleaning up old snapshot ${entry.path}`)
     rmSync(entry.path, { recursive: true, force: true })
 }
 

@@ -3,17 +3,17 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import makeWASocket, { Browsers, DisconnectReason, useMultiFileAuthState } from '../src/index.js'
 
-const argumen = process.argv.slice(2)
-const hanyaCek = argumen.includes('--check-only')
-const nomor = (argumen.find(a => !a.startsWith('--')) || process.env.PAIRING_PHONE || '').replace(/\D/g, '')
+const args = process.argv.slice(2)
+const checkOnly = args.includes('--check-only')
+const phone = (args.find(a => !a.startsWith('--')) || process.env.PAIRING_PHONE || '').replace(/\D/g, '')
 
-if (!nomor) {
-    console.error('Pakai: node script/testpairing.js <nomor> [--check-only]')
-    console.error('Contoh: node script/testpairing.js 6281234567890')
-    console.error('Nomor juga bisa lewat env PAIRING_PHONE.')
+if (!phone) {
+    console.error('Usage: node script/testpairing.js <number> [--check-only]')
+    console.error('Example: node script/testpairing.js 6281234567890')
+    console.error('The number can also be supplied through the PAIRING_PHONE environment variable.')
     console.error('')
-    console.error('--check-only  hanya melaporkan diterima/ditolak server, kode tidak pernah dicetak.')
-    console.error('              Wajib dipakai di lingkungan yang lognya bisa dibaca orang lain.')
+    console.error('--check-only  only reports whether the server accepted or rejected the request; the code is never printed.')
+    console.error('              Use it in environments where other people can read the logs.')
     process.exit(2)
 }
 
@@ -22,105 +22,105 @@ if (!nomor) {
  * Pairing writes creds as it goes, and reusing the bot's folder would replace
  * the identity it is already connected with.
  */
-const sesi = join(tmpdir(), 'elaina-uji-pairing-' + Date.now())
+const session = join(tmpdir(), 'zahan-pairing-test-' + Date.now())
 
-const log = (...bagian) => console.log(new Date().toISOString().slice(11, 19), ...bagian)
+const log = (...parts) => console.log(new Date().toISOString().slice(11, 19), ...parts)
 
-const bersihkan = async () => rm(sesi, { recursive: true, force: true }).catch(() => {})
-process.on('uncaughtException', async error => { console.error(error); await bersihkan(); process.exit(1) })
-process.on('unhandledRejection', async error => { console.error(error); await bersihkan(); process.exit(1) })
+const cleanup = async () => rm(session, { recursive: true, force: true }).catch(() => {})
+process.on('uncaughtException', async error => { console.error(error); await cleanup(); process.exit(1) })
+process.on('unhandledRejection', async error => { console.error(error); await cleanup(); process.exit(1) })
 
-const senyap = { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, fatal() {} }
-senyap.child = () => senyap
+const silent = { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, fatal() {} }
+silent.child = () => silent
 
-const { state, saveCreds } = await useMultiFileAuthState(sesi)
+const { state, saveCreds } = await useMultiFileAuthState(session)
 
 const sock = makeWASocket({
     auth: state,
     browser: Browsers.macOS('Chrome'),
     printQRInTerminal: false,
-    logger: senyap
+    logger: silent
 })
 
 sock.ev.on('creds.update', saveCreds)
 
-let selesai = false
-const tutup = async (kode) => {
-    if (selesai) return
-    selesai = true
+let finished = false
+const close = async (exitCode) => {
+    if (finished) return
+    finished = true
     try { sock.end(undefined) } catch {}
-    await bersihkan()
-    process.exit(kode)
+    await cleanup()
+    process.exit(exitCode)
 }
 
 sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
-    if (qr) log('server mengirim QR (normal, abaikan)')
+    if (qr) log('server sent a QR code (normal, ignore it)')
 
     if (connection === 'open') {
-        log('PAIRING BERHASIL — perangkat tertaut')
-        await tutup(0)
+        log('PAIRING SUCCEEDED — device linked')
+        await close(0)
     }
 
     if (connection === 'close') {
-        const alasan = lastDisconnect?.error?.output?.statusCode
-        if (alasan === DisconnectReason.restartRequired) {
-            log('server minta restart (ini normal setelah pairing berhasil)')
-            await tutup(0)
+        const reason = lastDisconnect?.error?.output?.statusCode
+        if (reason === DisconnectReason.restartRequired) {
+            log('server asked for a restart (normal after successful pairing)')
+            await close(0)
             return
         }
-        log('koneksi tertutup, alasan:', alasan ?? lastDisconnect?.error?.message ?? '-')
-        await tutup(1)
+        log('connection closed, reason:', reason ?? lastDisconnect?.error?.message ?? '-')
+        await close(1)
     }
 })
 
-const tunggu = ms => new Promise(r => setTimeout(r, ms))
-await tunggu(3000)
+const wait = ms => new Promise(r => setTimeout(r, ms))
+await wait(3000)
 
-log('meminta kode pairing untuk', nomor)
+log('requesting a pairing code for', phone)
 
 try {
-    const kode = await sock.requestPairingCode(nomor)
+    const code = await sock.requestPairingCode(phone)
     console.log('')
-    if (hanyaCek) {
-        log('registrasi DITERIMA server — ref tercatat')
-        log('Kode tidak dicetak karena --check-only aktif.')
-        log('Server menerima permintaan, jadi tidak ada rate limit maupun blokir fitur.')
-        await tutup(0)
+    if (checkOnly) {
+        log('registration ACCEPTED by server — reference recorded')
+        log('Code not printed because --check-only is active.')
+        log('The server accepted the request, so there is no rate limit or feature block.')
+        await close(0)
     }
-    console.log('  KODE PAIRING : ' + kode.match(/.{1,4}/g).join('-'))
+    console.log('  PAIRING CODE : ' + code.match(/.{1,4}/g).join('-'))
     console.log('')
-    log('registrasi DITERIMA server — ref tercatat')
-    log('Cek HP sekarang: notifikasi "Perangkat baru mencoba terhubung" seharusnya muncul.')
-    log('Kalau tidak ada notifikasi, buka WhatsApp > Perangkat Tertaut > Tautkan dengan nomor telepon,')
-    log('lalu ketik kode di atas. Kalau kode diterima, berarti registrasi memang berhasil')
-    log('dan yang tidak berjalan hanya push notification-nya.')
+    log('registration ACCEPTED by server — reference recorded')
+    log('Check your phone now: a "New device is trying to connect" notification should appear.')
+    log('If there is no notification, open WhatsApp > Linked Devices > Link with phone number,')
+    log('then type the code above. If the code is accepted, registration really did succeed')
+    log('and only the push notification failed.')
     console.log('')
-    log('menunggu sampai 3 menit...')
+    log('waiting up to 3 minutes...')
 }
 catch (error) {
     console.log('')
-    log('REGISTRASI DITOLAK')
-    log('pesan :', error.message)
-    log('kode  :', error.output?.statusCode ?? error.data ?? '-')
+    log('REGISTRATION REJECTED')
+    log('message:', error.message)
+    log('code   :', error.output?.statusCode ?? error.data ?? '-')
     console.log('')
     if (String(error.message).includes('rate-overlimit')) {
-        log('Artinya: terlalu sering mencoba. Tunggu beberapa jam sebelum coba lagi.')
+        log('Meaning: too many attempts. Wait a few hours before trying again.')
     }
     else if (/not-allowed|not-acceptable|feature/i.test(String(error.message))) {
-        log('Artinya: fitur tautkan-dengan-nomor belum aktif untuk akun ini.')
+        log('Meaning: link-with-phone-number is not enabled for this account.')
     }
     else if (String(error.message).includes('international format')) {
-        log('Artinya: format nomor salah. Pakai kode negara tanpa 0 di depan, contoh 6281234567890.')
+        log('Meaning: wrong number format. Use the country code without a leading 0, e.g. 6281234567890.')
     }
     else {
-        log('Ini balasan mentah dari server — sebelum perbaikan, error ini tidak pernah terlihat.')
+        log('This is the raw server reply — before the fix, this error was never visible.')
     }
-    await tutup(1)
+    await close(1)
 }
 
-await tunggu(180000)
-if (!selesai) {
-    log('waktu habis, kode tidak dipakai')
-    await tutup(1)
+await wait(180000)
+if (!finished) {
+    log('timed out, code was not used')
+    await close(1)
 }

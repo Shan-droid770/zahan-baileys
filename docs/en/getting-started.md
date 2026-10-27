@@ -13,7 +13,7 @@ node -v
 ## Install
 
 ```bash
-npm install @rexxhayanasi/elaina-baileys
+npm install zahan-baileys
 ```
 
 The package is ESM-first, so your `package.json` needs `"type": "module"`:
@@ -22,7 +22,7 @@ The package is ESM-first, so your `package.json` needs `"type": "module"`:
 {
   "type": "module",
   "dependencies": {
-    "@rexxhayanasi/elaina-baileys": "latest"
+    "zahan-baileys": "latest"
   }
 }
 ```
@@ -30,7 +30,7 @@ The package is ESM-first, so your `package.json` needs `"type": "module"`:
 ## Import
 
 ```js
-import makeWASocket from '@rexxhayanasi/elaina-baileys'
+import makeWASocket from 'zahan-baileys'
 ```
 
 Everything else comes from the same entry point:
@@ -45,7 +45,7 @@ import makeWASocket, {
   AIRich,
   MessageBuilder,
   MB
-} from '@rexxhayanasi/elaina-baileys'
+} from 'zahan-baileys'
 ```
 
 > [!NOTE]
@@ -59,7 +59,7 @@ The important part is not the socket — it is reconnecting when WhatsApp drops 
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason
-} from '@rexxhayanasi/elaina-baileys'
+} from 'zahan-baileys'
 import pino from 'pino'
 
 async function startSock() {
@@ -121,7 +121,7 @@ Use the international format without `+`, spaces, or symbols.
 ```js
 const code = await sock.requestPairingCode(
   '6281234567890',
-  'ELAINA01'
+  'ZAHAN01'
 )
 
 console.log(code)

@@ -95,8 +95,8 @@ await sock.sendMessage(jid, {
   poll: {
     name: 'Which cover?',
     values: [
-      { name: 'Jakarta', image: { url: './jakarta.jpg' } },
-      { name: 'Bandung', image: { url: './bandung.jpg' } }
+      { name: 'Colombo', image: { url: './colombo.jpg' } },
+      { name: 'Kandy', image: { url: './kandy.jpg' } }
     ],
     selectableCount: 1
   }
@@ -117,7 +117,7 @@ file hash is the part that was not directly observable in the bundle.
 
 ### Channel poll votes
 
-`newsletterSendPollVote(jid, pollServerId, ['Jakarta'])` sends the votes node newsletters
+`newsletterSendPollVote(jid, pollServerId, ['Colombo'])` sends the votes node newsletters
 use, where each `<vote>` is the raw sha256 of the option name rather than the encrypted
 vote used in chats.
 

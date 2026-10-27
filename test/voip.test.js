@@ -173,16 +173,16 @@ test('voip-playlist', async () => {
     /** One track: it plays, it ends, and the feeder reports it has nothing left. */
     {
         const { feeder, events } = makeFeeder();
-        feeder.start(['satu.mp3']);
+        feeder.start(['one.mp3']);
         clearTimeout(feeder._emitTimer);
-        assert.deepEqual(events, [['spawn', 'satu.mp3'], ['start', 'satu.mp3']]);
-        assert.equal(feeder.currentTrack, 'satu.mp3');
+        assert.deepEqual(events, [['spawn', 'one.mp3'], ['start', 'one.mp3']]);
+        assert.equal(feeder.currentTrack, 'one.mp3');
 
         feeder._proc = null;
         feeder._sourceEnded = true;
         feeder._tick();
         clearTimeout(feeder._emitTimer);
-        assert.deepEqual(events.slice(2), [['end', 'satu.mp3'], ['idle']], 'the end of the last track goes idle');
+        assert.deepEqual(events.slice(2), [['end', 'one.mp3'], ['idle']], 'the end of the last track goes idle');
         assert.equal(feeder.currentTrack, null);
         feeder.stop();
     }
@@ -190,13 +190,13 @@ test('voip-playlist', async () => {
     /** A queue: the next track starts by itself, with no gap to arrange. */
     {
         const { feeder, events } = makeFeeder();
-        feeder.start(['satu.mp3', 'dua.mp3']);
+        feeder.start(['one.mp3', 'two.mp3']);
         clearTimeout(feeder._emitTimer);
         feeder._proc = null;
         feeder._sourceEnded = true;
         feeder._tick();
         clearTimeout(feeder._emitTimer);
-        assert.deepEqual(events.slice(2), [['end', 'satu.mp3'], ['spawn', 'dua.mp3'], ['start', 'dua.mp3']]);
+        assert.deepEqual(events.slice(2), [['end', 'one.mp3'], ['spawn', 'two.mp3'], ['start', 'two.mp3']]);
         assert.equal(events.some(event => event[0] === 'idle'), false, 'a full queue never goes idle');
         feeder.stop();
     }
@@ -204,7 +204,7 @@ test('voip-playlist', async () => {
     /** A track arriving during the gap resumes the feeder without a restart. */
     {
         const { feeder, events } = makeFeeder();
-        feeder.start(['satu.mp3']);
+        feeder.start(['one.mp3']);
         clearTimeout(feeder._emitTimer);
         feeder._proc = null;
         feeder._sourceEnded = true;
@@ -212,22 +212,22 @@ test('voip-playlist', async () => {
         clearTimeout(feeder._emitTimer);
         assert.equal(feeder.idle, true);
 
-        feeder.enqueue('dua.mp3');
+        feeder.enqueue('two.mp3');
         clearTimeout(feeder._emitTimer);
         assert.equal(feeder.idle, false, 'enqueueing while idle picks the feeder back up');
-        assert.equal(feeder.currentTrack, 'dua.mp3');
-        assert.deepEqual(events.slice(-2), [['spawn', 'dua.mp3'], ['start', 'dua.mp3']]);
+        assert.equal(feeder.currentTrack, 'two.mp3');
+        assert.deepEqual(events.slice(-2), [['spawn', 'two.mp3'], ['start', 'two.mp3']]);
         feeder.stop();
     }
 
     /** skip drops the current track and moves on. */
     {
         const { feeder, events } = makeFeeder();
-        feeder.start(['satu.mp3', 'dua.mp3']);
+        feeder.start(['one.mp3', 'two.mp3']);
         clearTimeout(feeder._emitTimer);
         assert.equal(feeder.skip(), true);
         clearTimeout(feeder._emitTimer);
-        assert.equal(feeder.currentTrack, 'dua.mp3');
+        assert.equal(feeder.currentTrack, 'two.mp3');
         assert.equal(events.filter(event => event[0] === 'spawn').length, 2);
         feeder.stop();
     }
@@ -235,9 +235,9 @@ test('voip-playlist', async () => {
     /** enqueue takes a list, and playlistLength counts what is still waiting. */
     {
         const { feeder } = makeFeeder();
-        feeder.start(['satu.mp3']);
+        feeder.start(['one.mp3']);
         clearTimeout(feeder._emitTimer);
-        assert.equal(feeder.enqueue(['dua.mp3', 'tiga.mp3']), 2);
+        assert.equal(feeder.enqueue(['two.mp3', 'three.mp3']), 2);
         assert.equal(feeder.playlistLength, 2);
         feeder.clearPlaylist();
         assert.equal(feeder.playlistLength, 0);
@@ -250,7 +250,7 @@ test('voip-playlist', async () => {
      */
     {
         const { feeder, events } = makeFeeder();
-        feeder.start(['satu.mp3', 'dua.mp3']);
+        feeder.start(['one.mp3', 'two.mp3']);
         clearTimeout(feeder._emitTimer);
         feeder._buffering = false;
         feeder._absorb(Buffer.alloc(CHUNK_BYTES * 3));
@@ -258,8 +258,8 @@ test('voip-playlist', async () => {
         feeder._sourceEnded = true;
         feeder._tick();
         clearTimeout(feeder._emitTimer);
-        assert.equal(feeder.currentTrack, 'satu.mp3', 'the buffered tail still belongs to the first track');
-        assert.equal(events.some(event => event[1] === 'dua.mp3'), false);
+        assert.equal(feeder.currentTrack, 'one.mp3', 'the buffered tail still belongs to the first track');
+        assert.equal(events.some(event => event[1] === 'two.mp3'), false);
         feeder.stop();
     }
 
@@ -301,7 +301,7 @@ test('voip-playlist', async () => {
         const seen = [];
         call.on('ended', reason => seen.push(reason));
         call._onPlaylistIdle();
-        call.enqueue('dua.mp3');
+        call.enqueue('two.mp3');
         await new Promise(resolve => setTimeout(resolve, 80));
         assert.deepEqual(seen, [], 'the queued track kept the call up');
         assert.equal(call.queued(), 1);
@@ -566,7 +566,7 @@ test('voip-worker-boot', async () => {
      */
     const bootWorker = () => new Promise((resolve, reject) => {
         const worker = new Worker(new URL('../src/Voip/worker-bootstrap.js', import.meta.url), {
-            workerData: { storageDir: '/tmp/elaina-voip-test', resourcesPath: '/nonexistent' },
+            workerData: { storageDir: '/tmp/zahan-voip-test', resourcesPath: '/nonexistent' },
             stdout: true,
             stderr: true
         });
@@ -664,21 +664,21 @@ test('voice-recognition', async () => {
         }
     });
 
-    assert.equal(normalizeVoiceText('Hai, Elaina-Baileys!'), 'hai elaina baileys');
-    assert.equal(matchVoiceWakePhrase('Hai Elaina Baileys tolong buka menu', ['hai elaina-baileys'])?.phrase, 'hai elaina-baileys');
-    assert.equal(removeVoiceWakePhrase('Hai Elaina Baileys tolong buka menu', 'hai elaina-baileys'), 'tolong buka menu');
+    assert.equal(normalizeVoiceText('Hi, Zahan-Baileys!'), 'hi zahan baileys');
+    assert.equal(matchVoiceWakePhrase('Hi Zahan Baileys please open the menu', ['hi zahan-baileys'])?.phrase, 'hi zahan-baileys');
+    assert.equal(removeVoiceWakePhrase('Hi Zahan Baileys please open the menu', 'hi zahan-baileys'), 'please open the menu');
 
     const wake = makeHarness({
-        transcript: 'Hai Elaina Baileys, tolong buka menu',
-        getWakePhrases: async ({ senderJid }) => senderJid === USER ? ['hai elaina-baileys'] : []
+        transcript: 'Hi Zahan Baileys, please open the menu',
+        getWakePhrases: async ({ senderJid }) => senderJid === USER ? ['hi zahan-baileys'] : []
     });
     await wake.dispatch(message());
     assert.equal(wake.emitted.filter(event => event.name === 'voice.transcription').length, 1);
     assert.equal(wake.emitted.filter(event => event.name === 'voice.command').length, 1);
     assert.equal(wake.emitted.find(event => event.name === 'voice.command').data.activation, 'wake-phrase');
-    assert.equal(wake.emitted.find(event => event.name === 'voice.command').data.commandText, 'tolong buka menu');
+    assert.equal(wake.emitted.find(event => event.name === 'voice.command').data.commandText, 'please open the menu');
 
-    const quoted = makeHarness({ transcript: 'Tolong buka menu' });
+    const quoted = makeHarness({ transcript: 'Please open the menu' });
     await quoted.dispatch(message({
         contextInfo: {
             stanzaId: 'BOT-MESSAGE',
@@ -689,18 +689,18 @@ test('voice-recognition', async () => {
         }
     }));
     assert.equal(quoted.emitted.find(event => event.name === 'voice.command').data.activation, 'quoted');
-    assert.equal(quoted.emitted.find(event => event.name === 'voice.command').data.commandText, 'tolong buka menu');
+    assert.equal(quoted.emitted.find(event => event.name === 'voice.command').data.commandText, 'please open the menu');
 
-    const ignored = makeHarness({ transcript: 'Besok kita pergi jam tujuh', wakePhrases: ['hai elaina'] });
+    const ignored = makeHarness({ transcript: 'Tomorrow we leave at seven', wakePhrases: ['hi zahan'] });
     await ignored.dispatch(message());
     assert.equal(ignored.emitted.filter(event => event.name === 'voice.transcription').length, 1);
     assert.equal(ignored.emitted.filter(event => event.name === 'voice.command').length, 0);
 
-    const notPtt = makeHarness({ transcript: 'Hai Elaina buka menu', wakePhrases: ['hai elaina'] });
+    const notPtt = makeHarness({ transcript: 'Hi Zahan open the menu', wakePhrases: ['hi zahan'] });
     await notPtt.dispatch(message({ ptt: false }));
     assert.equal(notPtt.emitted.length, 0);
 
-    const tooLong = makeHarness({ transcript: 'Hai Elaina buka menu', wakePhrases: ['hai elaina'], maxDuration: 5 });
+    const tooLong = makeHarness({ transcript: 'Hi Zahan open the menu', wakePhrases: ['hi zahan'], maxDuration: 5 });
     await tooLong.dispatch(message({ seconds: 8 }));
     assert.equal(tooLong.emitted.length, 0);
 });

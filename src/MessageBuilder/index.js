@@ -8,13 +8,13 @@
  * and scalable architecture for modern bot development.
  *
  * Runtime:
- * - Baileys: @rexxhayanasi/elaina-baileys
+ * - Baileys: zahan-baileys
  *
  * Created by Nixel
- * Contributors: ~ Ahmad tumbuh kembang
+ * Contributors: ~ Ahmad (upstream MessageBuilder)
  *
  * WhatsApp: wa.me/6285188349341
- * Channel: https://whatsapp.com/channel/0029VbCV1ck8fewpdNb2TY2k
+ * Channel: https://www.sahanhost.qzz.io
  *
  * Copyright (c) 2026 Nixel
  *
@@ -512,7 +512,7 @@ class Toolkit {
 
 			try {
 				if (!Buffer.isBuffer(videoBuffer) || !videoBuffer.length) {
-					return fail(new Error('videoBuffer tidak valid atau kosong'));
+					return fail(new Error('videoBuffer is invalid or empty'));
 				}
 
 				const inputStream = new Readable({ read() {} });
@@ -529,7 +529,7 @@ class Toolkit {
 						let output = Buffer.concat(chunks);
 
 						if (!output.length) {
-							return fail(new Error('Output kosong — cek format atau timestamp video'));
+							return fail(new Error('Empty output — check the video format or timestamp'));
 						}
 
 						if (resize) {
@@ -3114,10 +3114,10 @@ class AIRich extends BaseBuilder {
 			return;
 		}
 		AIRich._placeholderWarned = true;
-		const message = 'AIRich: verification: "placeholder" memasang proof palsu, jadi status verifikasinya FAILED dan '
-			+ 'kartu ini termasker di klien yang mengaktifkan ai_rich_response_unknown_sender_verification_masking_enabled. '
-			+ 'Bawaannya "auto" (proof dihilangkan, status UNKNOWN) tidak kena cabang masking itu. '
-			+ 'Untuk kartu yang pasti tampil pakai Button/ButtonV2/Carousel, atau teruskan jawaban Meta AI asli lewat forwardRichResponse.';
+		const message = 'AIRich: verification: "placeholder" attaches a fake proof, so its verification status is FAILED and '
+			+ 'this card is masked on clients that enable ai_rich_response_unknown_sender_verification_masking_enabled. '
+			+ 'The default "auto" (proof omitted, status UNKNOWN) does not hit that masking branch. '
+			+ 'For a card that is guaranteed to render, use Button/ButtonV2/Carousel, or relay a genuine Meta AI answer with forwardRichResponse.';
 		const logger = client?.logger ?? client?.ev?.logger;
 		if (logger?.warn) {
 			logger.warn({ gate: 'ai_rich_response_unknown_sender_verification_masking_enabled' }, message);

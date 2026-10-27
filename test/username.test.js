@@ -22,8 +22,8 @@ test('usync-username-reverse-parse', () => {
         tag: 'iq',
         attrs: { type: 'result' },
         content: [{ tag: 'usync', attrs: {}, content: [{ tag: 'list', attrs: {}, content: [
-            { tag: 'user', attrs: { jid: '628123@s.whatsapp.net' }, content: [{ tag: 'username', attrs: {}, content: 'rexx' }] },
-            { tag: 'user', attrs: { jid: '628999@s.whatsapp.net' }, content: [{ tag: 'username', attrs: {}, content: 'elaina' }] }
+            { tag: 'user', attrs: { jid: '628123@s.whatsapp.net' }, content: [{ tag: 'username', attrs: {}, content: 'sahan' }] },
+            { tag: 'user', attrs: { jid: '628999@s.whatsapp.net' }, content: [{ tag: 'username', attrs: {}, content: 'zahan' }] }
         ] }] }]
     };
     const parsed = q.parseUSyncQueryResult(result);
@@ -31,31 +31,31 @@ test('usync-username-reverse-parse', () => {
         .filter(a => typeof a.username === 'string' && a.username.length > 0)
         .map(({ username, id }) => ({ jid: id, username }));
     assert.deepEqual(mapped, [
-        { jid: '628123@s.whatsapp.net', username: 'rexx' },
-        { jid: '628999@s.whatsapp.net', username: 'elaina' }
+        { jid: '628123@s.whatsapp.net', username: 'sahan' },
+        { jid: '628999@s.whatsapp.net', username: 'zahan' }
     ]);
 });
 
 test('usync-contact-username-nodes', () => {
     const q = new USyncQuery().withContactProtocol();
-    q.withUser(new USyncUser().withUsername('rexx').withUsernameKey('1234'));
-    q.withUser(new USyncUser().withUsername('elaina'));
+    q.withUser(new USyncUser().withUsername('sahan').withUsernameKey('1234'));
+    q.withUser(new USyncUser().withUsername('zahan'));
     const proto = q.protocols[0];
-    assert.deepEqual(proto.getUserElement(q.users[0]), { tag: 'contact', attrs: { username: 'rexx', pin: '1234' } });
-    assert.deepEqual(proto.getUserElement(q.users[1]), { tag: 'contact', attrs: { username: 'elaina' } });
+    assert.deepEqual(proto.getUserElement(q.users[0]), { tag: 'contact', attrs: { username: 'sahan', pin: '1234' } });
+    assert.deepEqual(proto.getUserElement(q.users[1]), { tag: 'contact', attrs: { username: 'zahan' } });
 });
 
 test('username-validation', () => {
-    assert.equal(validateUsername('rexx').isValid, true);
-    assert.equal(validateUsername('@rexx').isValid, true);
+    assert.equal(validateUsername('sahan').isValid, true);
+    assert.equal(validateUsername('@sahan').isValid, true);
     assert.equal(validateUsername('ab').isValid, false);
     assert.equal(validateUsername('1234').isValid, false);
-    assert.equal(validateUsername('.rexx').isValid, false);
-    assert.equal(validateUsername('www.rexx').isValid, false);
-    assert.equal(validateUsername('rexx.com').isValid, false);
+    assert.equal(validateUsername('.sahan').isValid, false);
+    assert.equal(validateUsername('www.sahan').isValid, false);
+    assert.equal(validateUsername('sahan.com').isValid, false);
     assert.equal(validateUsername('whatsapp1').isValid, false);
     assert.equal(isUsernamePin('1234'), true);
     assert.equal(isUsernamePin('12'), false);
-    assert.equal(displayUsername('rexx'), '@rexx');
-    assert.equal(stripUsernamePrefix('@rexx'), 'rexx');
+    assert.equal(displayUsername('sahan'), '@sahan');
+    assert.equal(stripUsernamePrefix('@sahan'), 'sahan');
 });

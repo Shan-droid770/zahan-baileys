@@ -2,10 +2,10 @@ import { proto } from '../../WAProto/index.js'
 import { initAuthCreds } from './auth-utils.js'
 import { BufferJSON } from './generics.js'
 
-export async function useNekoDBAuth(db, collectionName = 'baileys_elaina_auth') {
+export async function useNekoDBAuth(db, collectionName = 'baileys_zahan_auth') {
     if (!db || typeof db.collection !== 'function') {
         throw new Error(
-            'useNekoDBAuth: argumen pertama harus instance NekoDB yang terkoneksi'
+            'useNekoDBAuth: the first argument must be a connected NekoDB instance'
         )
     }
 

@@ -33,7 +33,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: elaina-baileys-auto-release
+  group: zahan-baileys-auto-release
   cancel-in-progress: false
 
 jobs:
@@ -165,18 +165,18 @@ jobs:
           git add -A
           if git diff --staged --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Tidak ada perubahan WhatsApp yang terdeteksi."
+            echo "No WhatsApp changes detected."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Perubahan WhatsApp terdeteksi."
+            echo "WhatsApp changes detected."
             git diff --staged --stat
           fi
 
       - name: Stop if no changes
         if: steps.changes.outputs.changed == 'false' && github.event.inputs.force != 'true'
         run: |
-          echo "Tidak ada perubahan dan force=false."
-          echo "Release dilewati."
+          echo "No changes and force=false."
+          echo "Release skipped."
 
       - name: Bump package version
         if: steps.changes.outputs.changed == 'true' || github.event.inputs.force == 'true'
@@ -249,7 +249,7 @@ jobs:
           git commit -m "chore: release v${VERSION} — WA update $(date -u +%Y-%m-%d)" || echo "No changes to commit"
           git pull --rebase origin main || true
           if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-            echo "Tag v${VERSION} sudah ada."
+            echo "Tag v${VERSION} already exists."
           else
             git tag "v${VERSION}"
           fi
@@ -266,7 +266,7 @@ jobs:
         shell: bash
         run: |
           VERSION=$(node -p 'require("./package.json").version')
-          PACKAGE_NAME="@rexxhayanasi/elaina-baileys"
+          PACKAGE_NAME="zahan-baileys"
 
           echo "Preparing ${PACKAGE_NAME}@${VERSION}"
 
@@ -276,7 +276,7 @@ jobs:
           fi
 
           if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
-            echo "${PACKAGE_NAME}@${VERSION} sudah tersedia di NPM."
+            echo "${PACKAGE_NAME}@${VERSION} is already available on NPM."
             exit 0
           fi
 
@@ -284,10 +284,10 @@ jobs:
 
           if [[ "$VERSION" == *"-"* ]]; then
             TAG=$(echo "$VERSION" | cut -d'-' -f2 | cut -d'.' -f1)
-            echo "Publishing prerelease dengan npm tag: ${TAG}"
+            echo "Publishing prerelease with npm tag: ${TAG}"
             npm publish --access public --tag "${TAG}"
           else
-            echo "Publishing stable release dengan npm tag: latest"
+            echo "Publishing stable release with npm tag: latest"
             npm publish --access public
           fi
 
@@ -298,9 +298,9 @@ jobs:
         shell: bash
         run: |
           VERSION=$(node -p 'require("./package.json").version')
-          echo "### Elaina Baileys Auto Update" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Zahan Baileys Auto Update" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Package: \`@rexxhayanasi/elaina-baileys\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Package: \`zahan-baileys\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Node.js: \`24\`" >> "$GITHUB_STEP_SUMMARY"
           if [[ "$VERSION" == *"-"* ]]; then

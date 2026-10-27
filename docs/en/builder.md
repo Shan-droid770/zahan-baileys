@@ -12,7 +12,7 @@ import {
   MessageBuilder,
   MB,
   MESSAGE_BUILDER_VERSION
-} from '@rexxhayanasi/elaina-baileys'
+} from 'zahan-baileys'
 ```
 
 The classes are also reachable through the `MessageBuilder` namespace or its short alias `MB`:
@@ -29,15 +29,15 @@ Every builder takes the socket in its constructor and ends with `.send(jid)`. Us
 `Button` builds native-flow interactive messages — the modern button type.
 
 ```js
-import { Button } from '@rexxhayanasi/elaina-baileys'
+import { Button } from 'zahan-baileys'
 
 const message = new Button(sock)
-  .setTitle('Elaina Menu')
+  .setTitle('Zahan Menu')
   .setBody('Choose an option below.')
-  .setFooter('@rexxhayanasi/elaina-baileys')
+  .setFooter('zahan-baileys')
   .addReply('Ping', 'ping')
   .addUrl('Open Website', 'https://example.com')
-  .addCopy('Copy Code', 'ELAINA2026')
+  .addCopy('Copy Code', 'ZAHAN2026')
 
 await message.send(jid)
 ```
@@ -48,10 +48,10 @@ await message.send(jid)
 
 ```js
 const message = new Button(sock)
-  .setImage('https://example.com/elaina.jpg')
-  .setTitle('Elaina')
+  .setImage('https://example.com/zahan.jpg')
+  .setTitle('Zahan')
   .setBody('Interactive message with image header.')
-  .setFooter('Powered by Elaina Baileys')
+  .setFooter('Powered by Zahan Baileys')
   .addReply('Menu', 'menu')
   .addUrl('Website', 'https://example.com')
 
@@ -98,9 +98,9 @@ A single-select list is a `Button` with `addSelection`, then sections and rows:
 
 ```js
 const list = new Button(sock)
-  .setTitle('Elaina Menu')
+  .setTitle('Zahan Menu')
   .setBody('Select one menu.')
-  .setFooter('Elaina Baileys')
+  .setFooter('Zahan Baileys')
   .addSelection('Open Menu')
   .makeSection('Main Menu')
   .makeRow('', 'Profile', 'Open profile menu', 'profile')
@@ -120,14 +120,14 @@ Rows attach to the section declared above them, so call `makeSection` before the
 `ButtonV2` is the simpler classic button builder. Fewer button types, less to configure.
 
 ```js
-import { ButtonV2 } from '@rexxhayanasi/elaina-baileys'
+import { ButtonV2 } from 'zahan-baileys'
 
 const message = new ButtonV2(sock)
-  .setTitle('Elaina')
+  .setTitle('Zahan')
   .setSubtitle('WhatsApp Bot')
   .setBody('Choose an action.')
-  .setFooter('Elaina Baileys')
-  .setThumbnail('https://example.com/elaina.jpg')
+  .setFooter('Zahan Baileys')
+  .setThumbnail('https://example.com/zahan.jpg')
   .addButton('Menu', 'menu')
   .addButton('Ping', 'ping')
 
@@ -139,7 +139,7 @@ await message.send(jid)
 A carousel is several cards you can swipe. Build each card with `Button.toCard()`, then hand them to `Carousel`.
 
 ```js
-import { Button, Carousel } from '@rexxhayanasi/elaina-baileys'
+import { Button, Carousel } from 'zahan-baileys'
 
 const card1 = await new Button(sock)
   .setImage('https://example.com/card1.jpg')
@@ -155,7 +155,7 @@ const card2 = await new Button(sock)
 
 const carousel = new Carousel(sock)
   .setBody('Choose one of the cards below.')
-  .setFooter('Elaina Carousel')
+  .setFooter('Zahan Carousel')
   .addCard([card1, card2])
 
 await carousel.send(jid)
@@ -171,13 +171,13 @@ await carousel.send(jid)
 `AIRich` builds rich responses with mixed content blocks — text, code, tables — in one message.
 
 ```js
-import { AIRich } from '@rexxhayanasi/elaina-baileys'
+import { AIRich } from 'zahan-baileys'
 
 const rich = new AIRich(sock)
-  .setTitle('Elaina AI')
+  .setTitle('Zahan AI')
   .setFooter('Generated with AIRich')
   .addText('Hello! This is a rich response.')
-  .addCode('javascript', `console.log('Hello Elaina')`)
+  .addCode('javascript', `console.log('Hello Zahan')`)
 
 await rich.send(jid)
 ```

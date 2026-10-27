@@ -1,4 +1,4 @@
-/* Elaina Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
+/* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 import { randomUUID } from 'crypto'
 import { AIRich } from './index.js'
 import { extractMessageContent, generateWAMessageFromContent, prepareWAMessageMedia } from '../Utils/messages.js'
@@ -242,7 +242,7 @@ export const dataUri = (bytes, mimetype) => {
 
 const MEDIA_TAGS = new Set(['video', 'audio', 'img'])
 
-export const htmlMedia = (bytes, { mimetype, tag = 'video', label = 'Tap untuk memuat media', poster, id = 'm' + randomUUID().slice(0, 8), attributes = '' } = {}) => {
+export const htmlMedia = (bytes, { mimetype, tag = 'video', label = 'Tap to load media', poster, id = 'm' + randomUUID().slice(0, 8), attributes = '' } = {}) => {
     if (!MEDIA_TAGS.has(tag)) {
         throw new TypeError('htmlMedia tag must be one of ' + [...MEDIA_TAGS].join(', '))
     }

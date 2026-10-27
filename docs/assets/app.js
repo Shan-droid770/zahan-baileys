@@ -1,6 +1,6 @@
 (function () {
     const root = document.documentElement
-    const stored = localStorage.getItem('elaina-docs-theme')
+    const stored = localStorage.getItem('zahan-docs-theme')
     const system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     root.setAttribute('data-theme', stored || system)
 
@@ -9,7 +9,7 @@
         toggle.addEventListener('click', function () {
             const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
             root.setAttribute('data-theme', next)
-            localStorage.setItem('elaina-docs-theme', next)
+            localStorage.setItem('zahan-docs-theme', next)
         })
     }
 
