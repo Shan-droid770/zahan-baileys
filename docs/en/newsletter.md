@@ -8,7 +8,7 @@ That distinction matters: most of the moderation and analytics methods below tak
 
 ```js
 const newsletter = await sock.newsletterCreate(
-  'Elaina Updates',
+  'Zahan Updates',
   'Official update channel'
 )
 
@@ -16,8 +16,8 @@ console.log(newsletter)
 ```
 
 ```js
-await sock.newsletterUpdateName('123456789@newsletter', 'Elaina News')
-await sock.newsletterUpdateDescription('123456789@newsletter', 'Fresh updates from Elaina')
+await sock.newsletterUpdateName('123456789@newsletter', 'Zahan News')
+await sock.newsletterUpdateDescription('123456789@newsletter', 'Fresh updates from Zahan')
 await sock.newsletterUpdatePicture('123456789@newsletter', { url: 'https://example.com/channel.jpg' })
 await sock.newsletterRemovePicture('123456789@newsletter')
 ```
@@ -108,7 +108,7 @@ const pending = await sock.newsletterPendingAdminInvites('123456789@newsletter')
 Channel votes are sent unencrypted as option hashes, unlike the encrypted votes used in chats:
 
 ```js
-await sock.newsletterSendPollVote('123456789@newsletter', pollServerId, ['Jakarta'])
+await sock.newsletterSendPollVote('123456789@newsletter', pollServerId, ['Colombo'])
 ```
 
 ```js
@@ -158,7 +158,7 @@ const list = await sock.newsletterDirectoryList({
   limit: 20
 })
 
-const found = await sock.newsletterDirectorySearch('elaina', { limit: 20 })
+const found = await sock.newsletterDirectorySearch('zahan', { limit: 20 })
 const preview = await sock.newsletterDirectoryCategories({ categories: ['NEWS'], countryCode: 'ID' })
 ```
 
@@ -178,4 +178,4 @@ Derived does not mean broken; it means untested against a server. When one answe
 > [!NOTE]
 > `newsletterSubscribers` uses a query id that in the current bundle belongs to the pending-admin-invites query, and its data path does not exist in that response. Use `newsletterFollowers`, which is what WhatsApp Web itself uses. The old binding was left in place rather than silently repointed.
 
-Full detail is in [EXPERIMENTAL.md](https://github.com/rexxzyid/elaina-baileys/blob/main/EXPERIMENTAL.md).
+Full detail is in [EXPERIMENTAL.md](https://github.com/Shan-droid770/zahan-baileys/blob/main/EXPERIMENTAL.md).

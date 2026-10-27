@@ -20,8 +20,8 @@ test('a2ui', async () => {
     assert.equal(A2UI_VERSION, 'v0.9');
     assert.equal(A2UI_BASIC_CATALOG, 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json');
 
-    assert.deepEqual(a2uiText('t', 'Halo'), { id: 't', component: 'Text', text: 'Halo', variant: 'body' });
-    assert.deepEqual(a2uiText('t', 'Judul', { variant: 'h1' }).variant, 'h1');
+    assert.deepEqual(a2uiText('t', 'Hello'), { id: 't', component: 'Text', text: 'Hello', variant: 'body' });
+    assert.deepEqual(a2uiText('t', 'Title', { variant: 'h1' }).variant, 'h1');
     assert.deepEqual(a2uiImage('i', 'https://x/y.jpg'), {
         id: 'i', component: 'Image', url: 'https://x/y.jpg', variant: 'header', fit: 'cover'
     });
@@ -30,13 +30,13 @@ test('a2ui', async () => {
 
     assert.throws(() => a2uiText('', 'x'), TypeError);
     assert.throws(() => a2uiImage('i', ''), TypeError);
-    assert.throws(() => a2uiColumn('root', 'bukan array'), TypeError);
+    assert.throws(() => a2uiColumn('root', 'not an array'), TypeError);
 
     const components = [
         a2uiColumn('root', ['card_image', 'card_title', 'card_description']),
         a2uiImage('card_image', 'https://pps.whatsapp.net/x.jpg'),
         a2uiText('card_title', 'Welcome!', { variant: 'h1' }),
-        a2uiText('card_description', 'Halo!')
+        a2uiText('card_description', 'Hello!')
     ];
 
     const surface = a2uiSurface(components, { surfaceId: 'card-1' });
@@ -47,11 +47,11 @@ test('a2ui', async () => {
     assert.equal('sendDataModel' in surface.createSurface, false);
     assert.equal(surface.createSurface.components.length, 4);
 
-    const infoCard = a2uiInfoCard({ title: '✨ MENU', body: 'Pilih kategori' });
-    assert.deepEqual(infoCard, { type: 'info_card', title: '✨ MENU', body: 'Pilih kategori' });
+    const infoCard = a2uiInfoCard({ title: '✨ MENU', body: 'Choose a category' });
+    assert.deepEqual(infoCard, { type: 'info_card', title: '✨ MENU', body: 'Choose a category' });
     assert.equal(a2uiListCard().type, 'list_card');
     assert.throws(() => a2uiInfoCard([]), TypeError);
-    assert.equal(a2uiFallback([a2uiText('t', 'Halo'), { type: 'info_card', title: 'Judul' }]), 'Halo\nJudul');
+    assert.equal(a2uiFallback([a2uiText('t', 'Hello'), { type: 'info_card', title: 'Title' }]), 'Hello\nTitle');
     assert.equal(a2uiFallback(null), '');
 
     const catalogued = a2uiSurface(components, { surfaceId: 'card-2', catalogId: A2UI_BASIC_CATALOG, sendDataModel: true });
@@ -66,7 +66,7 @@ test('a2ui', async () => {
     const widget = a2uiWidget(components, { uuid: 'u-1' });
     assert.equal(widget.type, BLOKS_A2UI_TYPE);
     assert.equal(widget.uuid, 'u-1');
-    assert.equal(widget.fallback, 'Welcome!\nHalo!');
+    assert.equal(widget.fallback, 'Welcome!\nHello!');
     assert.equal(typeof widget.data, 'string');
     assert.equal(JSON.parse(widget.data).createSurface.surfaceId, 'card-u-1');
     assert.equal(JSON.parse(widget.data).createSurface.root, 'root');
@@ -102,7 +102,7 @@ test('a2ui', async () => {
     const decoded = decodeBloksWidget(calls[0].message);
     assert.equal(decoded.type, BLOKS_A2UI_TYPE);
     assert.equal(decoded.params.createSurface.components[2].text, 'Welcome!');
-    assert.equal(interactive.bloksWidget.fallback, 'Welcome!\nHalo!');
+    assert.equal(interactive.bloksWidget.fallback, 'Welcome!\nHello!');
     assert.equal(interactive.body.text, interactive.bloksWidget.fallback);
 
     calls.length = 0;
@@ -111,7 +111,7 @@ test('a2ui', async () => {
     assert.equal(calls[0].message.interactiveMessage.contextInfo, undefined);
 
     calls.length = 0;
-    await sendA2UI(sock, '2@s.whatsapp.net', [], { uuid: 'u-el', data: a2uiInfoCard({ title: 'Menu', body: 'Pilih' }) });
+    await sendA2UI(sock, '2@s.whatsapp.net', [], { uuid: 'u-el', data: a2uiInfoCard({ title: 'Menu', body: 'Choose' }) });
     const elementWidget = calls[0].message.interactiveMessage.bloksWidget;
     assert.equal(elementWidget.type, BLOKS_A2UI_TYPE);
     assert.equal(elementWidget.fallback, 'Menu');
@@ -120,7 +120,7 @@ test('a2ui', async () => {
 
     const elementInfo = readRichMessage(calls[0].message);
     assert.equal(elementInfo.kind, 'a2ui');
-    assert.deepEqual(elementInfo.a2ui.element, { type: 'info_card', title: 'Menu', body: 'Pilih' });
+    assert.deepEqual(elementInfo.a2ui.element, { type: 'info_card', title: 'Menu', body: 'Choose' });
     assert.equal(elementInfo.a2ui.components, undefined);
     assert.equal(elementInfo.text, 'Menu');
 
@@ -132,8 +132,8 @@ test('a2ui', async () => {
 test('airich-map', async () => {
     const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async () => ({ key: { id: 'x' } }) };
     const places = [
-        { latitude: -6.2088, longitude: 106.8456, title: 'Warung Sederhana', body: 'Rumah makan padang' },
-        { latitude: -6.215, longitude: 106.85, title: 'Bakso Pak Kumis', body: 'Bakso urat' }
+        { latitude: -6.2088, longitude: 106.8456, title: 'Corner Cafe', body: 'Local restaurant' },
+        { latitude: -6.215, longitude: 106.85, title: 'Uncle Burgers', body: 'Beef burgers' }
     ];
 
     const richResponse = async rich => richOf((await rich.build('120363@g.us')).message);
@@ -157,8 +157,8 @@ test('airich-map', async () => {
             [1, 2],
             'annotations are numbered from one, the client keys its pins on it'
         );
-        assert.equal(submessage.mapMetadata.annotations[0].title, 'Warung Sederhana');
-        assert.equal(submessage.mapMetadata.annotations[0].body, 'Rumah makan padang');
+        assert.equal(submessage.mapMetadata.annotations[0].title, 'Corner Cafe');
+        assert.equal(submessage.mapMetadata.annotations[0].body, 'Local restaurant');
         assert.equal(submessage.mapMetadata.showInfoList, true);
 
         const [section] = unified(response).sections;
@@ -192,15 +192,15 @@ test('airich-map', async () => {
     {
         const rich = new AIRich(sock);
         assert.throws(() => rich.addMap([]), TypeError);
-        assert.throws(() => rich.addMap([{ title: 'Warung' }]), TypeError);
+        assert.throws(() => rich.addMap([{ title: 'Cafe' }]), TypeError);
         assert.throws(() => rich.addMap([{ latitude: -6.2, longitude: 'x' }]), TypeError);
     }
 
     /** mapMetadata survives the real encoder, which is where a wrong field would die. */
     {
         const rich = new AIRich(sock);
-        rich.addText('*Dekat kamu*');
-        rich.addMap(places, { staticMapUrl: 'https://example.com/map.png', motivation: 'tiga terdekat' });
+        rich.addText('*Near you*');
+        rich.addMap(places, { staticMapUrl: 'https://example.com/map.png', motivation: 'three nearest' });
         const built = await rich.build('120363@g.us');
         const decoded = proto.Message.decode(proto.Message.encode(built.message).finish());
         const submessages = richOf(decoded).submessages;
@@ -208,7 +208,7 @@ test('airich-map', async () => {
         assert.equal(submessages.length, 2);
         assert.equal(submessages[0].messageType, 2, 'the text submessage stays first');
         assert.equal(submessages[1].messageType, 7);
-        assert.equal(submessages[1].mapMetadata.annotations[1].title, 'Bakso Pak Kumis');
+        assert.equal(submessages[1].mapMetadata.annotations[1].title, 'Uncle Burgers');
     }
 });
 
@@ -228,15 +228,15 @@ test('auto-height', async () => {
     assert.match(prelude, /<\/script>$/);
     assert.equal(prelude.split('<script>').length, 2, 'exactly one script tag');
 
-    const page = prelude + '<div>halo</div>';
+    const page = prelude + '<div>hello</div>';
     const report = checkHtmlApp(page);
     assert.equal(report.ok, true, report.problems.join(' | '));
     assert.deepEqual(report.warnings, [], 'updateSize should settle the height on its own');
 
-    const bare = checkHtmlApp('<div>halo</div>');
+    const bare = checkHtmlApp('<div>hello</div>');
     assert.match(bare.warnings.join(' '), /no height settled/);
 
-    const manual = checkHtmlApp('<script>window.AndroidBridge.updateSize(300)</script><div>halo</div>');
+    const manual = checkHtmlApp('<script>window.AndroidBridge.updateSize(300)</script><div>hello</div>');
     assert.deepEqual(manual.warnings, []);
 
     /** The prelude must survive being parsed as a real script, not just look right. */
@@ -274,11 +274,11 @@ test('bloks-widget', async () => {
     assert.deepEqual(BLOKS_A2UI_SUPPORTED_ELEMENTS, ['info_card', 'list_card']);
     assert.equal(AI_RICH_PRIMITIVES.includes('FOABloksPrimitive'), true);
 
-    const section = bloksSection(BLOKS_A2UI_TYPE, { title: 'halo' }, { uuid: 'u-1', versioningId: '123' });
+    const section = bloksSection(BLOKS_A2UI_TYPE, { title: 'hello' }, { uuid: 'u-1', versioningId: '123' });
     assert.equal(section.view_model.__typename, 'GenAISingleLayoutViewModel');
     assert.equal(section.view_model.primitive.__typename, 'FOABloksPrimitive');
     assert.equal(section.view_model.primitive.type, BLOKS_A2UI_TYPE);
-    assert.equal(section.view_model.primitive.data, '{"title":"halo"}');
+    assert.equal(section.view_model.primitive.data, '{"title":"hello"}');
     assert.equal(section.view_model.primitive.uuid, 'u-1');
     assert.equal(section.view_model.primitive.initial_response, '');
     assert.equal(section.view_model.primitive.versioning_id, '123');
@@ -291,12 +291,12 @@ test('bloks-widget', async () => {
     assert.throws(() => bloksSection(123), TypeError);
     assert.throws(() => bloksSection('t', [1, 2]), TypeError);
 
-    const widget = bloksWidget({ type: BLOKS_A2UI_TYPE, data: { a2ui: 'info_card' }, uuid: 'u-2', fallback: 'buka di aplikasi terbaru' });
+    const widget = bloksWidget({ type: BLOKS_A2UI_TYPE, data: { a2ui: 'info_card' }, uuid: 'u-2', fallback: 'open in the latest app' });
     assert.deepEqual(widget, {
         type: BLOKS_A2UI_TYPE,
         data: '{"a2ui":"info_card"}',
         uuid: 'u-2',
-        fallback: 'buka di aplikasi terbaru'
+        fallback: 'open in the latest app'
     });
     assert.throws(() => bloksWidget({}), TypeError);
 
@@ -316,7 +316,7 @@ test('bloks-widget', async () => {
     const sent = await sendBloksWidget(sock, '2@s.whatsapp.net', {
         type: BLOKS_A2UI_TYPE,
         data: { a2ui_supported_elements: BLOKS_A2UI_SUPPORTED_ELEMENTS.join(', ') },
-        fallback: 'Kartu tidak didukung di sini'
+        fallback: 'Card not supported here'
     });
 
     assert.ok(sent.key.id);
@@ -326,7 +326,7 @@ test('bloks-widget', async () => {
     const interactive = calls[0].message.interactiveMessage;
     assert.equal(interactive.bloksWidget.type, BLOKS_A2UI_TYPE);
     assert.equal(interactive.bloksWidget.data, '{"a2ui_supported_elements":"info_card, list_card"}');
-    assert.equal(interactive.body.text, 'Kartu tidak didukung di sini');
+    assert.equal(interactive.body.text, 'Card not supported here');
     assert.equal(interactive.header, undefined);
     assert.equal(interactive.footer, undefined);
 
@@ -336,15 +336,15 @@ test('bloks-widget', async () => {
 
     const decoded = decodeBloksWidget(calls[0].message);
     assert.equal(decoded.type, BLOKS_A2UI_TYPE);
-    assert.equal(decoded.fallback, 'Kartu tidak didukung di sini');
+    assert.equal(decoded.fallback, 'Card not supported here');
     assert.deepEqual(decoded.params, { a2ui_supported_elements: 'info_card, list_card' });
 
-    assert.equal(decodeBloksWidget({ message: { conversation: 'halo' } }), null);
+    assert.equal(decodeBloksWidget({ message: { conversation: 'hello' } }), null);
     assert.deepEqual(
         decodeBloksWidget({ message: { viewOnceMessage: { message: { interactiveMessage: { bloksWidget: widget } } } } }).params,
         { a2ui: 'info_card' }
     );
-    assert.equal(decodeBloksWidget({ message: { interactiveMessage: { bloksWidget: { type: 't', data: 'bukan json' } } } }).params, null);
+    assert.equal(decodeBloksWidget({ message: { interactiveMessage: { bloksWidget: { type: 't', data: 'not json' } } } }).params, null);
 
     calls.length = 0;
     await sendBloksWidget(sock, '2@s.whatsapp.net', { type: 't', body: '' });
@@ -362,7 +362,7 @@ test('bloks-widget', async () => {
     const richSock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async (jid, message) => { richCalls.push({ jid, message }); } };
     const { AIRich } = await import('../src/MessageBuilder/index.js');
     const rich = new AIRich(richSock);
-    rich._addContent(bloksSection(BLOKS_A2UI_TYPE, { title: 'kartu' }));
+    rich._addContent(bloksSection(BLOKS_A2UI_TYPE, { title: 'card' }));
     await rich.send('2@s.whatsapp.net');
     assert.deepEqual(decodeAIRich({ message: richCalls[0].message }).typenames, ['FOABloksPrimitive']);
 });
@@ -371,7 +371,7 @@ test('a2ui-bloks-rich', async () => {
     const components = [
         a2uiColumn('root', ['img', 't1']),
         a2uiImage('img', 'https://files.catbox.moe/5hojci.jpg'),
-        a2uiText('t1', 'Elaina Bot')
+        a2uiText('t1', 'Zahan Bot')
     ];
 
     const section = buildA2UISection(components, { uuid: 'u-1' });
@@ -382,7 +382,7 @@ test('a2ui-bloks-rich', async () => {
     assert.equal(sectionData.createSurface.root, 'root');
     assert.equal(sectionData.createSurface.components.length, 3);
 
-    assert.throws(() => buildA2UISection([a2uiText('bukan-root', 'x')]), TypeError);
+    assert.throws(() => buildA2UISection([a2uiText('not-root', 'x')]), TypeError);
 
     const calls = [];
     const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async (jid, message) => { calls.push({ jid, message }); } };
@@ -400,7 +400,7 @@ test('a2ui-bloks-rich', async () => {
     assert.equal(info.a2ui.root, 'root');
     assert.equal(info.a2ui.components.length, 3);
     assert.equal(info.a2ui.catalogId, undefined);
-    assert.equal(info.text, 'Elaina Bot');
+    assert.equal(info.text, 'Zahan Bot');
 
     await assert.rejects(() => sendA2UIBloks(null, '2@s.whatsapp.net', components), TypeError);
     await assert.rejects(() => sendA2UIBloks(sock, '', components), TypeError);
@@ -426,26 +426,26 @@ test('deeplink-item', async () => {
 
     /** A > in front of the target marks a deeplink, the same way ! marks untrusted. */
     {
-        const [entity] = entities('buka [Setelan](>whatsapp://settings) sekarang');
+        const [entity] = entities('open [Settings](>whatsapp://settings) now');
         assert.equal(entity.metadata.__typename, 'GenAIDeeplinkItem');
         assert.equal(entity.metadata.deeplink_url, 'whatsapp://settings', 'the marker is stripped from the url');
-        assert.equal(entity.metadata.text, 'Setelan');
+        assert.equal(entity.metadata.text, 'Settings');
         assert.equal('url' in entity.metadata, false, 'a deeplink carries deeplink_url, not url');
         assert.equal('is_trusted' in entity.metadata, false);
     }
 
     /** Without the marker nothing changes — an ordinary link is still an inline link. */
     {
-        const [entity] = entities('lihat [situs](https://nixel.dev)');
+        const [entity] = entities('see [the site](https://nixel.dev)');
         assert.equal(entity.metadata.__typename, 'GenAIInlineLinkItem');
         assert.equal(entity.metadata.url, 'https://nixel.dev');
-        assert.equal(entity.metadata.display_name, 'situs');
+        assert.equal(entity.metadata.display_name, 'the site');
         assert.equal(entity.metadata.is_trusted, true);
     }
 
     /** The untrusted marker keeps working, and the two do not collide. */
     {
-        const [entity] = entities('lihat [situs](!https://nixel.dev)');
+        const [entity] = entities('see [the site](!https://nixel.dev)');
         assert.equal(entity.metadata.__typename, 'GenAIInlineLinkItem');
         assert.equal(entity.metadata.is_trusted, false);
         assert.equal(entity.metadata.url, 'https://nixel.dev');
@@ -492,7 +492,7 @@ test('deeplink-item', async () => {
         const calls = [];
         const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async (jid, message) => calls.push(message) };
         const rich = new AIRich(sock);
-        rich.addText('buka [Setelan](>whatsapp://settings)');
+        rich.addText('open [Settings](>whatsapp://settings)');
         const section = rich.sections[0];
         assert.equal(section.view_model.primitive.__typename, 'GenAIMarkdownTextUXPrimitive');
         assert.equal(section.view_model.primitive.inline_entities[0].metadata.__typename, 'GenAIDeeplinkItem');
@@ -503,7 +503,7 @@ test('deeplink-item', async () => {
 test('embedded-screen', async () => {
     const meta = botSourcesMetadata([
         { url: 'https://a.test', title: 'A', favicon: 'https://a.test/f.ico' },
-        { url: 'https://b.test', title: 'B', provider: SourceProvider.GOOGLE, citation: 7, query: 'cari', thumbnail: 'https://b.test/t.jpg' }
+        { url: 'https://b.test', title: 'B', provider: SourceProvider.GOOGLE, citation: 7, query: 'search', thumbnail: 'https://b.test/t.jpg' }
     ]);
     assert.equal(meta.sources.length, 2);
     assert.equal(meta.sources[0].sourceProviderUrl, 'https://a.test');
@@ -514,12 +514,12 @@ test('embedded-screen', async () => {
     assert.equal('thumbnailCdnUrl' in meta.sources[0], false);
     assert.equal(meta.sources[1].provider, SourceProvider.GOOGLE);
     assert.equal(meta.sources[1].citationNumber, 7);
-    assert.equal(meta.sources[1].sourceQuery, 'cari');
+    assert.equal(meta.sources[1].sourceQuery, 'search');
     assert.equal(meta.sources[1].thumbnailCdnUrl, 'https://b.test/t.jpg');
 
     assert.throws(() => botSourcesMetadata([]), TypeError);
     assert.throws(() => botSourcesMetadata('x'), TypeError);
-    assert.throws(() => botSourcesMetadata([{ title: 'tanpa url' }]), TypeError);
+    assert.throws(() => botSourcesMetadata([{ title: 'without url' }]), TypeError);
     assert.throws(() => botSourcesMetadata([['a']]), TypeError);
 
     const screen = embeddedScreen({ id: 's-1', content: [htmlSection('<b>x</b>')] });
@@ -531,7 +531,7 @@ test('embedded-screen', async () => {
     assert.equal(embeddedScreen({}).content, undefined);
 
     /** UnifiedResponseRepository reads title, so it belongs on the screen after all. */
-    assert.equal(embeddedScreen({ title: 'Rincian' }).title, 'Rincian');
+    assert.equal(embeddedScreen({ title: 'Details' }).title, 'Details');
     assert.equal('title' in embeddedScreen({}), false, 'omitted rather than sent empty');
 
     assert.equal(EMBEDDED_SCREEN_PRESENTATION.HALF_HEIGHT, 'HALF_HEIGHT');
@@ -593,15 +593,15 @@ test('embedded-screen', async () => {
     const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async (jid, message) => { calls.push({ jid, message }); } };
 
     const rich = new AIRich(sock);
-    rich.addSection(htmlSection('<b>utama</b>'));
-    rich.addEmbeddedScreen(embeddedScreen({ id: 'layar', content: [htmlSection('<b>dalam</b>')] }));
+    rich.addSection(htmlSection('<b>main</b>'));
+    rich.addEmbeddedScreen(embeddedScreen({ id: 'screen', content: [htmlSection('<b>inside</b>')] }));
     rich.setBotMetadata({ richResponseSourcesMetadata: meta });
     await rich.send('2@s.whatsapp.net');
 
     const decoded = decodeAIRich({ message: calls[0].message });
     assert.equal(decoded.embeddedScreens.length, 1);
-    assert.equal(decoded.unified.embedded_screens[0].id, 'layar');
-    assert.equal(decoded.unified.embedded_screens[0].content[0].view_model.primitive.payload, '<b>dalam</b>');
+    assert.equal(decoded.unified.embedded_screens[0].id, 'screen');
+    assert.equal(decoded.unified.embedded_screens[0].content[0].view_model.primitive.payload, '<b>inside</b>');
     assert.equal(decoded.unified.sections[0].__typename, AI_RICH_SECTION_TYPENAME, 'the typename survives the base64 round trip');
     assert.equal(decoded.unified.embedded_screens[0].content[0].__typename, AI_RICH_SECTION_TYPENAME);
     assert.equal(decoded.embeddedSections.length, 1);
@@ -613,7 +613,7 @@ test('embedded-screen', async () => {
 
     calls.length = 0;
     const arcade = new AIRich(sock);
-    arcade.addSection(htmlSection('<b>utama</b>'));
+    arcade.addSection(htmlSection('<b>main</b>'));
     arcade.addEmbeddedScreen(embeddedScreen({ title: 'Preview', tabs: [embeddedTab({ id: 'tab_0', tabHeader: 'Dino Runner', sections: [htmlSection('<b>dino</b>')] })] }));
     await arcade.send('2@s.whatsapp.net');
 
@@ -629,12 +629,12 @@ test('embedded-screen', async () => {
     assert.equal(readRichMessage({ message: calls[0].message }).html.includes('<b>dino</b>'), true, 'html inside a tab is still readable');
 
     calls.length = 0;
-    const polos = new AIRich(sock);
-    polos.addSection(htmlSection('<b>x</b>'));
-    await polos.send('2@s.whatsapp.net');
-    const tanpa = decodeAIRich({ message: calls[0].message });
-    assert.equal('embedded_screens' in tanpa.unified, false);
-    assert.deepEqual(tanpa.embeddedScreens, []);
+    const plain = new AIRich(sock);
+    plain.addSection(htmlSection('<b>x</b>'));
+    await plain.send('2@s.whatsapp.net');
+    const withoutScreens = decodeAIRich({ message: calls[0].message });
+    assert.equal('embedded_screens' in withoutScreens.unified, false);
+    assert.deepEqual(withoutScreens.embeddedScreens, []);
 
     assert.throws(() => rich.addEmbeddedScreen('x'), ContentValidationError);
     assert.throws(() => rich.addEmbeddedScreen([]), ContentValidationError);
@@ -669,7 +669,7 @@ test('file-section', async () => {
     assert.equal('mime_type' in bare, false);
     assert.equal('uuid' in bare, false);
 
-    assert.equal(fileSection('https://x/y', { fileLength: 'besar' }).view_model.primitive.file_length, 0);
+    assert.equal(fileSection('https://x/y', { fileLength: 'large' }).view_model.primitive.file_length, 0);
     assert.equal(fileSection('https://x/y.pdf', { fileExtension: 'pdf' }).view_model.primitive.file_extension, 'pdf');
     assert.equal(fileLinkSection('https://x/y').view_model.primitive.__typename, 'GenAIFileLinkPrimitive');
 
@@ -693,24 +693,24 @@ test('file-section', async () => {
 
     console.log('file section tests passed');
 
-    const dokumen = [];
-    const docSock = { sendMessage: async (jid, content) => { dokumen.push({ jid, content }); return { key: { id: 'X' } }; } };
+    const documents = [];
+    const docSock = { sendMessage: async (jid, content) => { documents.push({ jid, content }); return { key: { id: 'X' } }; } };
 
-    const hasil = await sendHtmlDocument(docSock, '2@s.whatsapp.net', '<h1>halo</h1>', { fileName: 'main.html', caption: 'buka ini' });
-    assert.equal(hasil.key.id, 'X');
-    assert.equal(dokumen[0].jid, '2@s.whatsapp.net');
-    assert.equal(dokumen[0].content.mimetype, 'text/html');
-    assert.equal(dokumen[0].content.fileName, 'main.html');
-    assert.equal(dokumen[0].content.caption, 'buka ini');
-    assert.equal(dokumen[0].content.document.toString('utf-8'), '<h1>halo</h1>');
+    const result = await sendHtmlDocument(docSock, '2@s.whatsapp.net', '<h1>hello</h1>', { fileName: 'main.html', caption: 'open this' });
+    assert.equal(result.key.id, 'X');
+    assert.equal(documents[0].jid, '2@s.whatsapp.net');
+    assert.equal(documents[0].content.mimetype, 'text/html');
+    assert.equal(documents[0].content.fileName, 'main.html');
+    assert.equal(documents[0].content.caption, 'open this');
+    assert.equal(documents[0].content.document.toString('utf-8'), '<h1>hello</h1>');
 
-    dokumen.length = 0;
+    documents.length = 0;
     await sendHtmlDocument(docSock, '2@s.whatsapp.net', '<b>x</b>');
-    assert.equal(dokumen[0].content.fileName, 'app.html');
-    assert.equal('caption' in dokumen[0].content, false);
+    assert.equal(documents[0].content.fileName, 'app.html');
+    assert.equal('caption' in documents[0].content, false);
 
     await sendHtmlDocument(docSock, '2@s.whatsapp.net', '<b>x</b>', { fileName: 'a.HTM' });
-    assert.equal(dokumen[1].content.fileName, 'a.HTM');
+    assert.equal(documents[1].content.fileName, 'a.HTM');
 
     await assert.rejects(() => sendHtmlDocument(docSock, '2@s.whatsapp.net', '<b>x</b>', { fileName: 'a.pdf' }), TypeError);
     await assert.rejects(() => sendHtmlDocument(docSock, '2@s.whatsapp.net', ''), TypeError);
@@ -719,11 +719,11 @@ test('file-section', async () => {
 });
 
 test('footer-action', async () => {
-    const section = footerActionSection(FooterActionType.OPEN_FULL_VIEW, { buttonText: 'Buka penuh', url: 'https://meta.ai/x' });
+    const section = footerActionSection(FooterActionType.OPEN_FULL_VIEW, { buttonText: 'Open full view', url: 'https://meta.ai/x' });
     assert.equal(section.view_model.__typename, 'GenAISingleLayoutViewModel');
     assert.equal(section.view_model.primitive.__typename, 'GenAIFooterActionPrimitive');
     assert.equal(section.view_model.primitive.cta_type, 'OPEN_FULL_VIEW');
-    assert.equal(section.view_model.primitive.cta_text, 'Buka penuh');
+    assert.equal(section.view_model.primitive.cta_text, 'Open full view');
     assert.equal(section.view_model.primitive.cta_url, 'https://meta.ai/x');
 
     assert.equal(footerActionSection(FooterActionType.DOWNLOAD_MEDIA).view_model.primitive.cta_text, '');
@@ -736,8 +736,8 @@ test('footer-action', async () => {
     const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async (jid, message) => { calls.push({ jid, message }); } };
 
     const rich = new AIRich(sock);
-    rich.addSection(htmlSection('<b>isi</b>'));
-    rich.addFooterSection(footerActionSection(FooterActionType.OPEN_FULL_VIEW, { buttonText: 'Buka' }));
+    rich.addSection(htmlSection('<b>content</b>'));
+    rich.addFooterSection(footerActionSection(FooterActionType.OPEN_FULL_VIEW, { buttonText: 'Open' }));
     await rich.send('2@s.whatsapp.net');
 
     const decoded = decodeAIRich({ message: calls[0].message });
@@ -747,24 +747,24 @@ test('footer-action', async () => {
     assert.equal(decoded.unified.footer_sections[0].view_model.primitive.cta_type, 'OPEN_FULL_VIEW');
 
     calls.length = 0;
-    const polos = new AIRich(sock);
-    polos.addSection(htmlSection('<b>isi</b>'));
-    await polos.send('2@s.whatsapp.net');
+    const plain = new AIRich(sock);
+    plain.addSection(htmlSection('<b>content</b>'));
+    await plain.send('2@s.whatsapp.net');
     const tanpaFooter = decodeAIRich({ message: calls[0].message });
     assert.equal('footer_sections' in tanpaFooter.unified, false);
     assert.deepEqual(tanpaFooter.footerSections, []);
     assert.deepEqual(tanpaFooter.footerTypenames, []);
 
-    assert.throws(() => rich.addFooterSection('bukan objek'), ContentValidationError);
+    assert.throws(() => rich.addFooterSection('not an object'), ContentValidationError);
     assert.throws(() => rich.addFooterSection([]), ContentValidationError);
     assert.equal(rich.clearFooterSections()._footerSections.length, 0);
 });
 
 test('html-section', async () => {
-    const section = htmlSection('<body>halo</body>', { trustedSources: ['nixel.dev'] });
+    const section = htmlSection('<body>hello</body>', { trustedSources: ['nixel.dev'] });
     assert.equal(section.view_model.__typename, 'GenAISingleLayoutViewModel');
     assert.equal(section.view_model.primitive.__typename, AI_RICH_HTML_PRIMITIVE);
-    assert.equal(section.view_model.primitive.payload, '<body>halo</body>');
+    assert.equal(section.view_model.primitive.payload, '<body>hello</body>');
     assert.deepEqual(section.view_model.primitive.trusted_sources, ['nixel.dev']);
 
     assert.deepEqual(htmlSection('<b>x</b>').view_model.primitive.trusted_sources, []);
@@ -823,7 +823,7 @@ test('html-section', async () => {
     assert.equal(decoded.sections[0].view_model.primitive.payload, html);
 
     calls.length = 0;
-    await sendHtmlApp(sock, '2@s.whatsapp.net', '<b>ringkas</b>');
+    await sendHtmlApp(sock, '2@s.whatsapp.net', '<b>compact</b>');
     const bare = richOf(calls[0].message);
     assert.deepEqual(bare.submessages, []);
     assert.ok(bare.unifiedResponse.data);
@@ -843,18 +843,18 @@ test('html-section', async () => {
     assert.equal(richOf(calls[0].message).unifiedResponse.data, '');
 
     calls.length = 0;
-    await sendHtmlApp(sock, '2@s.whatsapp.net', '<b>tinggi</b>', { height: 300 });
-    const dikunci = decodeAIRich({ message: calls[0].message }).sections[0].view_model.primitive.payload;
-    assert.ok(dikunci.includes('height:300px'));
-    assert.ok(dikunci.endsWith('<b>tinggi</b>'));
+    await sendHtmlApp(sock, '2@s.whatsapp.net', '<b>tall</b>', { height: 300 });
+    const lockedHtml = decodeAIRich({ message: calls[0].message }).sections[0].view_model.primitive.payload;
+    assert.ok(lockedHtml.includes('height:300px'));
+    assert.ok(lockedHtml.endsWith('<b>tall</b>'));
 
     await assert.rejects(() => sendHtmlApp(null, '2@s.whatsapp.net', '<b>a</b>'), TypeError);
     await assert.rejects(() => sendHtmlApp(sock, '', '<b>a</b>'), TypeError);
 
     console.log('html section tests passed');
 
-    const kustom = htmlSection('<b>x</b>', { typename: 'FOAHtmlPrimitive' });
-    assert.equal(kustom.view_model.primitive.__typename, 'FOAHtmlPrimitive');
+    const customHtml = htmlSection('<b>x</b>', { typename: 'FOAHtmlPrimitive' });
+    assert.equal(customHtml.view_model.primitive.__typename, 'FOAHtmlPrimitive');
     assert.equal(htmlSection('<b>x</b>').view_model.primitive.__typename, AI_RICH_HTML_PRIMITIVE);
     assert.throws(() => htmlSection('<b>x</b>', { typename: '' }), TypeError);
     assert.throws(() => htmlSection('<b>x</b>', { typename: 7 }), TypeError);
@@ -907,24 +907,24 @@ test('metaai-sections', async () => {
     /** Every helper produces a section the same shape the existing ones do. */
     {
         const sections = [
-            mapSection({ staticMapUrl: 'https://map.test/s.png', items: [placeItem({ id: '1', name: 'Warung' })] }),
+            mapSection({ staticMapUrl: 'https://map.test/s.png', items: [placeItem({ id: '1', name: 'Cafe' })] }),
             sportsSection({ gameId: 'g1', league: SportsLeague.EURO, status: SportsGameStatus.LIVE }),
             videoSection({ postId: '9', progressiveUrls: ['https://v.test/a.mp4'] }),
             reminderSection({ reminderId: 'r1', title: 'Bangun' }),
-            commentSection({ text: 'halo', actorName: 'Rexx' }),
-            compactEntitySection({ title: 'Rexx', entityId: '5' }),
-            actionListSection([actionListRow({ title: 'Buka' })]),
-            searchPlannerSection({ steps: [plannerStep({ title: 'cari' })] }),
+            commentSection({ text: 'hello', actorName: 'Sahan' }),
+            compactEntitySection({ title: 'Sahan', entityId: '5' }),
+            actionListSection([actionListRow({ title: 'Open' })]),
+            searchPlannerSection({ steps: [plannerStep({ title: 'search' })] }),
             searchResultV2Section({ queryUrl: 'https://s.test' }),
-            plannerSnippetSection({ header: 'Mencari', currentStep: 1, totalSteps: 3 }),
-            chainOfThoughtSection({ header: 'Berpikir', text: 'halo' }),
-            searchAdSection({ storyId: '3', message: 'iklan' }),
+            plannerSnippetSection({ header: 'Searching', currentStep: 1, totalSteps: 3 }),
+            chainOfThoughtSection({ header: 'Thinking', text: 'hello' }),
+            searchAdSection({ storyId: '3', message: 'ad' }),
             transparencySection({ annotation: 'a', signals: [transparencySignal({ id: '1', value: 'x' })] }),
-            accountLinkingSection({ title: 'Hubungkan', apps: [accountLinkingApp({ label: 'Gmail' })] }),
-            calendarWidgetSection({ title: 'Jadwal', sections: [{ date: '2026-09-07', events: [calendarEvent({ title: 'Rapat' })] }] }),
-            chainingSuggestionSection({ promptText: 'lanjut' }),
-            locationPermissionSection('izinkan lokasi'),
-            timestampPlaceholderSection('baru saja')
+            accountLinkingSection({ title: 'Connect', apps: [accountLinkingApp({ label: 'Gmail' })] }),
+            calendarWidgetSection({ title: 'Schedule', sections: [{ date: '2026-09-07', events: [calendarEvent({ title: 'Meeting' })] }] }),
+            chainingSuggestionSection({ promptText: 'continue' }),
+            locationPermissionSection('allow location'),
+            timestampPlaceholderSection('just now')
         ];
         for (const section of sections) {
             assert.equal(section.__typename, 'GenAIUnifiedResponseSection');
@@ -936,14 +936,14 @@ test('metaai-sections', async () => {
 
     /** Field names are the client's wire names, not camelCase. */
     {
-        const map = primitive(mapSection({ staticMapUrl: 'https://map.test/s.png', motivation: 'dekat kamu' }));
+        const map = primitive(mapSection({ staticMapUrl: 'https://map.test/s.png', motivation: 'near you' }));
         assert.equal(map.__typename, 'GenAIMapPrimitive');
         assert.equal(map.map_query_status, MapQueryStatus.FETCHED);
         assert.equal(map.static_map.default_url, 'https://map.test/s.png');
         assert.equal(map.static_map.dark_theme_url, 'https://map.test/s.png');
-        assert.equal(map.motivation, 'dekat kamu');
+        assert.equal(map.motivation, 'near you');
 
-        const place = placeItem({ id: 7, name: 'Warung', rating: 4.5, latitude: -6.2, longitude: 106.8, categoryName: 'Makanan' });
+        const place = placeItem({ id: 7, name: 'Cafe', rating: 4.5, latitude: -6.2, longitude: 106.8, categoryName: 'Makanan' });
         assert.equal(place.__typename, 'GenAIPlaceDetailsItem');
         assert.equal(place.id, '7');
         assert.equal(place.rating.avg_rating, 4.5);
@@ -957,10 +957,10 @@ test('metaai-sections', async () => {
             awayTeam: { name: 'B' },
             homeScore: 2,
             awayScore: 1,
-            groupName: 'Grup C'
+            groupName: 'Group C'
         }));
         assert.equal(game.game_id, 'g1');
-        assert.equal(game.group.group_name, 'Grup C');
+        assert.equal(game.group.group_name, 'Group C');
         assert.equal(game.content.home_team.icon.image.url, 'https://i.test/a.png');
         assert.equal(game.content.away_team.__typename, 'GenAISportsTeam');
         assert.equal(game.content.home_score, 2);
@@ -970,22 +970,22 @@ test('metaai-sections', async () => {
         assert.equal(video.video_delivery_response.progressive_urls[0].progressive_url, 'https://v.test/a.mp4');
         assert.equal(video.video_delivery_response.dash_manifests[0].manifest_xml, '<xml/>');
 
-        const comment = primitive(commentSection({ text: 'halo', likes: 3, replies: 1 }));
-        assert.equal(comment.comment_text, 'halo');
+        const comment = primitive(commentSection({ text: 'hello', likes: 3, replies: 1 }));
+        assert.equal(comment.comment_text, 'hello');
         assert.equal(comment.likes_count, 3);
         assert.equal(comment.replies_count, 1);
 
-        const entity = primitive(compactEntitySection({ title: 'Rexx', entityId: 5 }));
+        const entity = primitive(compactEntitySection({ title: 'Sahan', entityId: 5 }));
         assert.equal(entity.entity_id, '5');
         assert.equal(entity.entity_type, CompactEntityType.PERSON);
 
-        const list = primitive(actionListSection([actionListRow({ title: 'Buka', url: 'https://x.test' })]));
+        const list = primitive(actionListSection([actionListRow({ title: 'Open', url: 'https://x.test' })]));
         assert.equal(list.rows[0].__typename, 'GenAIActionListRow');
         assert.equal(list.rows[0].row_type, ActionListRowType.ACTION);
 
-        const planner = primitive(searchPlannerSection({ steps: [plannerStep({ title: 'cari', instruction: 'buka web' })] }));
+        const planner = primitive(searchPlannerSection({ steps: [plannerStep({ title: 'search', instruction: 'open the web' })] }));
         assert.equal(planner.steps[0].status, SearchPlannerStepStatus.PLANNED);
-        assert.equal(planner.steps[0].instruction.text, 'buka web');
+        assert.equal(planner.steps[0].instruction.text, 'open the web');
     }
 
     /** A few layouts carry their own fields next to the primitives, not on the section. */
@@ -996,7 +996,7 @@ test('metaai-sections', async () => {
         assert.equal(many.view_model.layout_type, MultipleResponseLayoutType.IN_THREAD);
         assert.equal('layout_type' in many, false, 'layout fields sit on the view model');
 
-        const addon = addonActionSection([{ __typename: 'GenAIMarkdownTextUXPrimitive', text: 'Salin' }], { actionType: 'SEND_TO_CHAT' });
+        const addon = addonActionSection([{ __typename: 'GenAIMarkdownTextUXPrimitive', text: 'Copy' }], { actionType: 'SEND_TO_CHAT' });
         assert.equal(addon.view_model.__typename, 'GenAIAddonActionLayoutViewModel');
         assert.equal(addon.view_model.addon_action_type, 'SEND_TO_CHAT');
         assert.equal(addon.view_model.addon_action_alignment, 'END');
@@ -1004,25 +1004,25 @@ test('metaai-sections', async () => {
 
         assert.throws(() => addonActionSection([], { actionType: 'SEND_TO_CHAT' }), /at least one overlay button/);
         assert.throws(() => addonActionSection([{ __typename: 'GenAIMarkdownTextUXPrimitive' }], { actionType: 'NOPE' }), /actionType must be one of/);
-        assert.throws(() => addonActionSection([{ cta_text: 'Salin', footer_action_type: 'COPY_LINK', __typename: 'GenAIFooterActionPrimitive' }], { actionType: 'COPY_TO_CLIPBOARD' }), /force-close/);
+        assert.throws(() => addonActionSection([{ cta_text: 'Copy', footer_action_type: 'COPY_LINK', __typename: 'GenAIFooterActionPrimitive' }], { actionType: 'COPY_TO_CLIPBOARD' }), /force-close/);
     }
 
     /** Items are plain nodes a layout carries; they are not sections themselves. */
     {
-        const media = mediaItem({ previewUrl: 'https://i.test/p.jpg', fullUrl: 'https://i.test/f.jpg', followUpPills: ['lagi'] });
+        const media = mediaItem({ previewUrl: 'https://i.test/p.jpg', fullUrl: 'https://i.test/f.jpg', followUpPills: ['again'] });
         assert.equal(media.__typename, 'GenAIMediaItem');
         assert.equal(media.preview_image.url, 'https://i.test/p.jpg');
         assert.equal(media.full_image.url_fallback, 'https://i.test/f.jpg');
-        assert.equal(media.follow_up_pills[0].prompt_text, 'lagi');
+        assert.equal(media.follow_up_pills[0].prompt_text, 'again');
         assert.equal('dark_mode_full_image' in media, false);
 
         const grid = mediaGridSection([media]);
         assert.equal(grid.view_model.__typename, 'GenAIGridLayoutViewModel');
         assert.equal(grid.view_model.primitives[0].__typename, 'GenAIMediaItem');
 
-        assert.equal(socialEntityItem({ entityId: 1, name: 'Rexx' }).entity_name, 'Rexx');
+        assert.equal(socialEntityItem({ entityId: 1, name: 'Sahan' }).entity_name, 'Sahan');
         assert.equal(productEntityItem({ productId: 2, imageUrl: 'https://i.test/x.jpg' }).image.url, 'https://i.test/x.jpg');
-        assert.equal(threadSurfingItem({ entity: 'Bali', prompts: ['apa itu'] }).prompts[0].prompt_id, '0');
+        assert.equal(threadSurfingItem({ entity: 'Bali', prompts: ['what is it'] }).prompts[0].prompt_id, '0');
         assert.equal(sideBySideSurveyItem({ surveyId: 4 }).survey_id, '4');
         assert.equal(contextualSourcesSection([{ url: 'https://s.test', title: 'S' }])
             .view_model.primitive.contextual_sources[0].display_name, 'S');
@@ -1058,19 +1058,19 @@ test('read-rich', async () => {
     const last = () => calls[calls.length - 1];
 
     assert.equal(readRichMessage(null), null);
-    assert.equal(readRichMessage({ message: { conversation: 'halo' } }), null);
+    assert.equal(readRichMessage({ message: { conversation: 'hello' } }), null);
     assert.equal(readRichMessage({ message: { imageMessage: { url: 'x' } } }), null);
 
     calls.length = 0;
     await sendA2UI(sock, '2@s.whatsapp.net', [
         a2uiColumn('root', ['t', 'd']),
         a2uiText('t', 'Welcome!', { variant: 'h1' }),
-        a2uiText('d', 'Halo dunia')
+        a2uiText('d', 'Hello world')
     ], { uuid: 'u-1', buttons: [{ name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: 'Join', url: 'https://x' }) }] });
 
     const a2ui = readRichMessage(last());
     assert.equal(a2ui.kind, 'a2ui');
-    assert.equal(a2ui.text, 'Welcome!\nHalo dunia');
+    assert.equal(a2ui.text, 'Welcome!\nHello world');
     assert.equal(a2ui.a2ui.surfaceId, 'card-u-1');
     assert.equal(a2ui.a2ui.root, 'root');
     assert.equal(a2ui.a2ui.version, 'v0.9');
@@ -1079,50 +1079,50 @@ test('read-rich', async () => {
     assert.deepEqual(a2ui.buttons, [{ name: 'cta_url', params: { display_text: 'Join', url: 'https://x' } }]);
 
     calls.length = 0;
-    await sendHtmlApp(sock, '2@s.whatsapp.net', '<b>halo</b>', { title: 'MINI APP', label: 'buka' });
+    await sendHtmlApp(sock, '2@s.whatsapp.net', '<b>hello</b>', { title: 'MINI APP', label: 'open' });
     const html = readRichMessage(last());
     assert.equal(html.kind, 'airich');
     assert.equal(html.title, 'MINI APP');
-    assert.deepEqual(html.html, ['<b>halo</b>']);
+    assert.deepEqual(html.html, ['<b>hello</b>']);
     assert.deepEqual(html.typenames, ['GenAIaeacdsnwHtmlPrimitive']);
-    assert.deepEqual(html.submessages, [{ messageType: 2, messageText: 'buka' }]);
+    assert.deepEqual(html.submessages, [{ messageType: 2, messageText: 'open' }]);
     assert.ok(html.responseId);
 
     calls.length = 0;
     const rich = new AIRich(sock);
-    rich.setTitle('JUDUL');
-    rich.addText('baris pertama');
-    rich.addText('baris kedua');
+    rich.setTitle('TITLE');
+    rich.addText('first line');
+    rich.addText('second line');
     rich.addSection(htmlSection('<i>x</i>'));
     await rich.send('2@s.whatsapp.net');
     assert.ok(calls.length >= 1);
-    const teks = readRichMessage(calls[0]);
-    assert.equal(teks.kind, 'airich');
-    assert.ok(teks.text.includes('baris pertama'));
-    assert.ok(teks.text.includes('baris kedua'));
-    assert.deepEqual(teks.html, ['<i>x</i>']);
+    const textValue = readRichMessage(calls[0]);
+    assert.equal(textValue.kind, 'airich');
+    assert.ok(textValue.text.includes('first line'));
+    assert.ok(textValue.text.includes('second line'));
+    assert.deepEqual(textValue.html, ['<i>x</i>']);
 
     calls.length = 0;
-    await sendBloksWidget(sock, '2@s.whatsapp.net', { type: 'im_lain', data: { a: 1 }, fallback: 'tidak didukung' });
+    await sendBloksWidget(sock, '2@s.whatsapp.net', { type: 'im_lain', data: { a: 1 }, fallback: 'not supported' });
     const bloks = readRichMessage(last());
     assert.equal(bloks.kind, 'bloks');
     assert.equal(bloks.bloks.type, 'im_lain');
     assert.deepEqual(bloks.bloks.params, { a: 1 });
     assert.equal(bloks.a2ui, undefined);
-    assert.equal(bloks.text, 'tidak didukung');
+    assert.equal(bloks.text, 'not supported');
 
-    const dibungkus = { message: { viewOnceMessageV2: { message: last().interactiveMessage ? { interactiveMessage: last().interactiveMessage } : {} } } };
-    assert.equal(readRichMessage(dibungkus).kind, 'bloks');
+    const wrapped = { message: { viewOnceMessageV2: { message: last().interactiveMessage ? { interactiveMessage: last().interactiveMessage } : {} } } };
+    assert.equal(readRichMessage(wrapped).kind, 'bloks');
 
-    const polos = readRichMessage({
-        message: { interactiveMessage: { body: { text: 'badan' }, footer: { text: 'kaki' }, nativeFlowMessage: { buttons: [{ name: 'x', buttonParamsJson: 'bukan json' }] } } }
+    const plain = readRichMessage({
+        message: { interactiveMessage: { body: { text: 'body' }, footer: { text: 'footer' }, nativeFlowMessage: { buttons: [{ name: 'x', buttonParamsJson: 'not json' }] } } }
     });
-    assert.equal(polos.kind, 'interactive');
-    assert.equal(polos.text, 'badan\nkaki');
-    assert.deepEqual(polos.buttons, [{ name: 'x', params: null }]);
+    assert.equal(plain.kind, 'interactive');
+    assert.equal(plain.text, 'body\nfooter');
+    assert.deepEqual(plain.buttons, [{ name: 'x', params: null }]);
 
-    const kedua = calls.map(readRichMessage).filter(Boolean);
-    assert.equal(kedua.length, 1);
+    const secondRead = calls.map(readRichMessage).filter(Boolean);
+    assert.equal(secondRead.length, 1);
 });
 
 test('native-flow', async () => {
@@ -1172,7 +1172,7 @@ test('forward-rich-response', async () => {
 
     const unifiedBytes = Buffer.from(JSON.stringify({
         response_id: 'r-1',
-        sections: [{ __typename: 'GenAIUnifiedResponseSection', view_model: { primitive: { text: 'halo', __typename: 'GenAIMarkdownTextUXPrimitive' }, __typename: 'GenAISingleLayoutViewModel' } }]
+        sections: [{ __typename: 'GenAIUnifiedResponseSection', view_model: { primitive: { text: 'hello', __typename: 'GenAIMarkdownTextUXPrimitive' }, __typename: 'GenAISingleLayoutViewModel' } }]
     }));
 
     /** A message shaped the way one really arrives from the Meta AI bot. */
@@ -1196,7 +1196,7 @@ test('forward-rich-response', async () => {
                 richResponseMessage: {
                     messageType: 1,
                     unifiedResponse: { data: unifiedBytes },
-                    submessages: [{ messageType: 2, messageText: 'halo' }],
+                    submessages: [{ messageType: 2, messageText: 'hello' }],
                     contextInfo: {
                         isForwarded: true,
                         forwardingScore: 1,
@@ -1241,7 +1241,7 @@ test('forward-rich-response', async () => {
         assert.deepEqual(Buffer.from(proof.signature), Buffer.alloc(64, 9), 'the proof travels verbatim');
         assert.equal(proof.certificateChain.length, 2);
         assert.deepEqual(Buffer.from(proof.certificateChain[0]), realDer);
-        assert.equal(rich.submessages[0].messageText, 'halo');
+        assert.equal(rich.submessages[0].messageText, 'hello');
     }
 
     /** Quoting and extra contextInfo are safe: contextInfo is not part of the payload. */
@@ -1249,7 +1249,7 @@ test('forward-rich-response', async () => {
         const calls = [];
         const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async (jid, message) => calls.push(message) };
         await forwardRichResponse(sock, '120363@g.us', { message: incoming() }, {
-            quoted: { key: { id: 'Q1', participant: '628@s.whatsapp.net' }, message: { conversation: 'tanya' } },
+            quoted: { key: { id: 'Q1', participant: '628@s.whatsapp.net' }, message: { conversation: 'question' } },
             contextInfo: { mentionedJid: ['628@s.whatsapp.net'] }
         });
 
@@ -1268,10 +1268,10 @@ test('forward-rich-response', async () => {
     {
         const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async () => ({ key: { id: 'x' } }) };
 
-        const omitted = await new AIRich(sock).addText('halo').build('120363@g.us');
+        const omitted = await new AIRich(sock).addText('hello').build('120363@g.us');
         assert.equal(readSignedRichResponse(omitted).hasProof, false, 'default carries no proof at all');
 
-        const placeheld = await new AIRich(sock).addText('halo').build('120363@g.us', { verification: 'placeholder' });
+        const placeheld = await new AIRich(sock).addText('hello').build('120363@g.us', { verification: 'placeholder' });
         const signed = readSignedRichResponse(placeheld);
         assert.equal(signed.hasProof, true, 'placeholder fills the fields');
 
@@ -1290,8 +1290,8 @@ test('forward-rich-response', async () => {
     /** Anything that is not a rich response is refused rather than half-relayed. */
     {
         const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async () => {} };
-        assert.equal(readSignedRichResponse({ message: { conversation: 'halo' } }), null);
-        await assert.rejects(forwardRichResponse(sock, '120363@g.us', { message: { conversation: 'halo' } }), TypeError);
+        assert.equal(readSignedRichResponse({ message: { conversation: 'hello' } }), null);
+        await assert.rejects(forwardRichResponse(sock, '120363@g.us', { message: { conversation: 'hello' } }), TypeError);
     }
 
     /**
@@ -1319,7 +1319,7 @@ test('forward-rich-response', async () => {
     {
         const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async () => ({ key: { id: 'x' } }) };
         const mutations = [
-            rich => rich.addText('tambahan'),
+            rich => rich.addText('extra'),
             rich => rich.addSection({ __typename: 'GenAIUnifiedResponseSection', view_model: { primitive: { text: 'x', __typename: 'GenAIMarkdownTextUXPrimitive' }, __typename: 'GenAISingleLayoutViewModel' } }),
             rich => { rich.assignId(0, 'n0'); rich.delete('n0'); },
             rich => rich.addFooterSection({ __typename: 'GenAIUnifiedResponseSection' }),
@@ -1338,7 +1338,7 @@ test('forward-rich-response', async () => {
 
         const edited = new AIRich(sock);
         edited.loadFrom({ message: incoming() });
-        edited.addText('tambahan');
+        edited.addText('extra');
         const built = await edited.build('120363@g.us');
         const data = richOf(built.message).unifiedResponse.data;
         assert.notDeepEqual(Buffer.from(String(data), 'base64'), unifiedBytes);
@@ -1348,7 +1348,7 @@ test('forward-rich-response', async () => {
     {
         const sock = { user: { id: '1@s.whatsapp.net' }, relayMessage: async () => ({ key: { id: 'x' } }) };
         const plain = new AIRich(sock);
-        plain.addText('halo');
+        plain.addText('hello');
         const built = await plain.build('120363@g.us');
 
         const reloaded = new AIRich(sock);
@@ -1374,8 +1374,8 @@ test('bot-signature', async () => {
 
     /** version || botFbid || unified response bytes, concatenated, nothing else. */
     {
-        const payload = constructSignaturePayload({ botFbid: '867051314767696', messageDigest: Buffer.from('halo') });
-        assert.deepEqual(payload, Buffer.concat([Buffer.from('1'), Buffer.from('867051314767696'), Buffer.from('halo')]));
+        const payload = constructSignaturePayload({ botFbid: '867051314767696', messageDigest: Buffer.from('hello') });
+        assert.deepEqual(payload, Buffer.concat([Buffer.from('1'), Buffer.from('867051314767696'), Buffer.from('hello')]));
     }
 
     let openssl = true;
@@ -1495,7 +1495,7 @@ test('airich-verification-flag', async () => {
      * The default now omits the proof entirely, so the state is UNKNOWN and that branch is
      * never reached. build() reports which of the three shapes went out.
      */
-    const omitted = await new AIRich({}).setTitle('Elaina AI').addMetadata('Sumber: BMKG').build('628@s.whatsapp.net');
+    const omitted = await new AIRich({}).setTitle('Zahan AI').addMetadata('Source: BMKG').build('628@s.whatsapp.net');
     assert.equal(omitted.aiVerification, 'omitted', 'the default no longer ships a fake proof');
     assert.equal('verificationMetadata' in omitted.message.messageContextInfo.botMetadata, false, 'no proof field at all → state UNKNOWN, not FAILED');
 
@@ -1519,7 +1519,7 @@ test('airich-verification-flag', async () => {
 });
 
 test('airich-wrapper', async () => {
-    const build = (options) => new AIRich({}).addText('halo').build('628@s.whatsapp.net', options);
+    const build = (options) => new AIRich({}).addText('hello').build('628@s.whatsapp.net', options);
 
     const wrapped = await build();
     assert.ok(wrapped.message.botForwardedMessage?.message?.richResponseMessage,
@@ -1534,7 +1534,7 @@ test('airich-wrapper', async () => {
         assert.equal(decodeAIRich(msg.message)?.sections?.length, 1, `${name} still decodes`);
     }
 
-    const rich = new AIRich({}).addText('halo');
+    const rich = new AIRich({}).addText('hello');
     const built = await rich.build('628@s.whatsapp.net');
 
     const edit = await rich.buildEdit('628@s.whatsapp.net', built.key.id, { msg: built.message });
@@ -1549,9 +1549,9 @@ test('airich-wrapper', async () => {
 test('new-airich-sections-2.26.37.6', async () => {
     const MB = (await import('../src/MessageBuilder/metaai.js'));
 
-    const quiz = MB.quizSection({ title: 'Kuis', subject: 'Umum', questions: [{ question: '1+1?', options: ['1', '2'], correctIndices: [1], explanation: 'dua', hints: ['angka'] }] });
+    const quiz = MB.quizSection({ title: 'Quiz', subject: 'General', questions: [{ question: '1+1?', options: ['1', '2'], correctIndices: [1], explanation: 'two', hints: ['number'] }] });
     assert.equal(quiz.view_model.primitive.__typename, 'GenAIQuizPrimitive');
-    assert.equal(quiz.view_model.primitive.subject, 'Umum');
+    assert.equal(quiz.view_model.primitive.subject, 'General');
     assert.equal(quiz.view_model.primitive.questions[0].__typename, 'GenAIQuizQuestion');
     assert.deepEqual(quiz.view_model.primitive.questions[0].correct_indices, [1]);
     assert.deepEqual(quiz.view_model.primitive.questions[0].options, ['1', '2']);
@@ -1563,7 +1563,7 @@ test('new-airich-sections-2.26.37.6', async () => {
     assert.equal(group.view_model.primitive.buttons[0].__typename, 'GenAIActionButton');
     assert.equal(group.view_model.primitive.buttons[0].deeplink_url, 'https://x');
 
-    const fused = MB.fusedComparisonSection({ columns: [{ productId: 7, title: 'A', price: '10', cta: { label: 'Beli', uri: 'https://x' } }], rows: [{ label: 'Harga', cells: ['10', '20'] }], labelColumnIndex: 0, pinLabelColumn: true });
+    const fused = MB.fusedComparisonSection({ columns: [{ productId: 7, title: 'A', price: '10', cta: { label: 'Beli', uri: 'https://x' } }], rows: [{ label: 'Price', cells: ['10', '20'] }], labelColumnIndex: 0, pinLabelColumn: true });
     assert.equal(fused.view_model.primitive.__typename, 'GenAIFusedComparisonTablePrimitive');
     assert.equal(fused.view_model.primitive.columns[0].__typename, 'GenAIFusedComparisonColumn');
     assert.equal(fused.view_model.primitive.columns[0].product_id, '7');
@@ -1580,21 +1580,21 @@ test('airich-message-surface', async () => {
     assert.equal(AI_RICH_SUBMESSAGE_TABLE, 4);
     assert.equal(AI_RICH_SUBMESSAGE_CONTENT_ITEMS, 9);
 
-    assert.deepEqual(AIRichMessage.text('halo'), { messageType: 2, messageText: 'halo' });
+    assert.deepEqual(AIRichMessage.text('hello'), { messageType: 2, messageText: 'hello' });
     assert.equal(AIRichMessage.inlineImage({ previewUrl: 'https://x/y.jpg' }).messageType, 3);
     assert.equal(AIRichMessage.inlineImage({ previewUrl: 'https://x/y.jpg' }).imageMetadata.imageUrl.imagePreviewUrl, 'https://x/y.jpg');
     assert.deepEqual(AIRichMessage.table({ rows: [{ items: ['a', 'b'], isHeading: true }] }).tableMetadata.rows[0].items, ['a', 'b']);
     assert.equal(AIRichMessage.contentItems({ items: [{ id: '1' }] }).messageType, 9);
 
-    assert.throws(() => aiRichSubmessage('tidak_ada'), TypeError);
+    assert.throws(() => aiRichSubmessage('not_found'), TypeError);
     assert.throws(() => aiRichInlineImage({}), TypeError);
     assert.throws(() => aiRichTable({ rows: [] }), TypeError);
 
-    const textSection = AIRichMessage.textSection('Halo');
+    const textSection = AIRichMessage.textSection('Hello');
     assert.equal(textSection.view_model.primitive.__typename, 'FOABloksPrimitive');
-    assert.equal(textSection.view_model.primitive.messageText, 'Halo');
+    assert.equal(textSection.view_model.primitive.messageText, 'Hello');
 
-    const nativeFlow = AIRichMessage.nativeFlowSection('cta_url', { display_text: 'Buka', url: 'https://x' }, { uuid: 'u1' });
+    const nativeFlow = AIRichMessage.nativeFlowSection('cta_url', { display_text: 'Open', url: 'https://x' }, { uuid: 'u1' });
     assert.equal(nativeFlow.view_model.primitive.type, 'cta_url');
     assert.equal(nativeFlow.view_model.primitive.uuid, 'u1');
 
@@ -1602,7 +1602,7 @@ test('airich-message-surface', async () => {
     const sock = { relayMessage: async (...args) => (calls.push(args), {}) };
 
     const built = await sendAIRichMessage(sock, '628@s.whatsapp.net', {
-        text: 'Halo',
+        text: 'Hello',
         submessages: [aiRichInlineImage({ previewUrl: 'https://x/y.jpg' })]
     });
 
@@ -1625,10 +1625,10 @@ test('airich-message-surface', async () => {
 
     await assert.rejects(() => sendAIRichMessage(sock, '628@s.whatsapp.net', {}), TypeError);
     await assert.rejects(() => sendAIRichMessage(null, '628@s.whatsapp.net', { text: 'x' }), TypeError);
-    await assert.rejects(() => sendAIRichMessage(sock, '628@s.whatsapp.net', { nativeFlow: 'bukan objek' }), TypeError);
+    await assert.rejects(() => sendAIRichMessage(sock, '628@s.whatsapp.net', { nativeFlow: 'not an object' }), TypeError);
 
     const a2uiViaAirich = await sendAIRichMessage(sock, '628@s.whatsapp.net', {
-        sections: [buildA2UISection([a2uiColumn('root', ['t']), a2uiText('t', 'Halo')], { uuid: 'a2ui-1' })]
+        sections: [buildA2UISection([a2uiColumn('root', ['t']), a2uiText('t', 'Hello')], { uuid: 'a2ui-1' })]
     });
     const a2uiRich = richOf(a2uiViaAirich.message);
     const a2uiDecoded = JSON.parse(Buffer.from(a2uiRich.unifiedResponse.data, 'base64').toString('utf8'));
@@ -1638,7 +1638,7 @@ test('airich-message-surface', async () => {
 
 test('airich-submessage-without-section', async () => {
     const rich = new AIRich({});
-    rich.addSubmessage({ messageType: 2, messageText: 'tanpa section' });
+    rich.addSubmessage({ messageType: 2, messageText: 'without section' });
 
     assert.equal(rich.sections.length, 0, 'a submessage can exist without a section');
     assert.equal(rich.items.length, 0);
@@ -1646,13 +1646,13 @@ test('airich-submessage-without-section', async () => {
     const built = await rich.build('628@s.whatsapp.net');
     const decoded = richOf(built.message);
     assert.equal(decoded.submessages.length, 1);
-    assert.equal(decoded.submessages[0].messageText, 'tanpa section');
+    assert.equal(decoded.submessages[0].messageText, 'without section');
     const withoutSections = JSON.parse(Buffer.from(decoded.unifiedResponse.data, 'base64').toString('utf8'));
     assert.deepEqual(withoutSections.sections, []);
 
     const paired = new AIRich({});
     paired.addSubmessage({ messageType: 2, messageText: 'a' }, { id: 'sub-a' });
     assert.equal(paired.peek('sub-a').submessage.messageText, 'a');
-    assert.throws(() => paired.addSubmessage([{ messageType: 2, messageText: 'x' }, { messageType: 2, messageText: 'y' }], { id: 'satu' }), ContentValidationError);
+    assert.throws(() => paired.addSubmessage([{ messageType: 2, messageText: 'x' }, { messageType: 2, messageText: 'y' }], { id: 'one' }), ContentValidationError);
     assert.throws(() => rich.addSubmessage(null), ContentValidationError);
 });

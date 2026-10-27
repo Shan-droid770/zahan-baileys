@@ -39,7 +39,7 @@ const HANDS_OFF = new Set([
 ])
 
 if (!dir) {
-    console.error('pakai: node script/auditapk.js <folder-berisi-classes.dex> [keluaran.txt]')
+    console.error('Usage: node script/auditapk.js <folder-with-classes.dex> [output.txt]')
     process.exit(1)
 }
 
@@ -190,7 +190,7 @@ const collectOurs = () => {
 
 const dexFiles = readdirSync(dir).filter(name => /^classes\d*\.dex$/.test(name)).sort()
 if (!dexFiles.length) {
-    console.error('tidak ada classes*.dex di ' + dir)
+    console.error('no classes*.dex found in ' + dir)
     process.exit(1)
 }
 
@@ -259,13 +259,13 @@ for (const entry of apk) {
 }
 
 const report = [
-    'kelas protobuf di apk : ' + apk.length,
-    'tipe di WAProto kita  : ' + ours.length,
+    'protobuf classes in apk : ' + apk.length,
+    'types in our WAProto   : ' + ours.length,
     '',
-    '## field yang hilang (' + missingFields.length + ')',
+    '## missing fields (' + missingFields.length + ')',
     ...missingFields.sort(),
     '',
-    '## tipe tanpa padanan (' + missingTypes.length + ')',
+    '## types without a match (' + missingTypes.length + ')',
     ...missingTypes.sort()
 ].join('\n')
 
@@ -275,26 +275,26 @@ if (jsonOut) {
     for (const entry of apk) {
         if (!entry.gap) continue
         if (HANDS_OFF.has(entry.ourType)) {
-            skipped.push(entry.ourType + ' (' + entry.gap.join(' ') + ') — libsignal, dibiarkan')
+            skipped.push(entry.ourType + ' (' + entry.gap.join(' ') + ') — libsignal, left alone')
             continue
         }
         if (claimed.get(entry.ourType)?.cls !== entry.cls) {
-            skipped.push(entry.ourType + ' (' + entry.gap.join(' ') + ') — ' + entry.cls + ' bukan padanan terbaik')
+            skipped.push(entry.ourType + ' (' + entry.gap.join(' ') + ') — ' + entry.cls + ' is not the best match')
             continue
         }
         const fields = []
         for (const name of entry.gap) {
             const java = entry.javaTypes[name]
             const id = entry.numbers[name]
-            if (!java || !id) { skipped.push(entry.ourType + '.' + name + ' — tipe atau nomor tidak terbaca'); continue }
+            if (!java || !id) { skipped.push(entry.ourType + '.' + name + ' — type or number could not be read'); continue }
             if (taken.get(entry.ourType.split('.').pop())?.has(id)) {
-                skipped.push(entry.ourType + '.' + name + ' — nomor ' + id + ' sudah dipakai field lain')
+                skipped.push(entry.ourType + '.' + name + ' — number ' + id + ' is already used by another field')
                 continue
             }
             if (KINDS[java]) { fields.push({ name, id, kind: KINDS[java] }); continue }
             const ref = matched.get(java)
             if (ref) { fields.push({ name, id, kind: 'MESSAGE', ref }); continue }
-            skipped.push(entry.ourType + '.' + name + ' — ' + java + ' tidak bisa dipetakan')
+            skipped.push(entry.ourType + '.' + name + ' — ' + java + ' cannot be mapped')
         }
         for (const field of fields) {
             field.androidOnly = web ? !web.get(entry.ourType)?.has(field.name.toLowerCase()) : null
@@ -303,19 +303,19 @@ if (jsonOut) {
     }
     gaps.sort((a, b) => a.type.localeCompare(b.type))
     writeFileSync(jsonOut, JSON.stringify({ gaps, needed: [], specs: {} }, null, 2) + '\n')
-    console.log('siap ditambal: ' + gaps.reduce((n, g) => n + g.fields.length, 0) + ' field di ' + gaps.length + ' tipe -> ' + jsonOut)
-    if (!web) console.log('  (bundle Web tidak tersedia, status khusus-android tidak diperiksa)')
+    console.log('ready to patch: ' + gaps.reduce((n, g) => n + g.fields.length, 0) + ' fields in ' + gaps.length + ' types -> ' + jsonOut)
+    if (!web) console.log('  (Web bundle unavailable, Android-only status not checked)')
     for (const gap of gaps) {
         for (const field of gap.fields) {
-            if (field.androidOnly) console.log('  KHUSUS ANDROID ' + gap.type + '.' + field.name + ' — aman didekode, kirim hanya kalau memang disengaja')
+            if (field.androidOnly) console.log('  ANDROID ONLY ' + gap.type + '.' + field.name + ' — safe to decode, send only when intentional')
         }
     }
-    for (const line of skipped.sort()) console.log('  lewati ' + line)
+    for (const line of skipped.sort()) console.log('  skip ' + line)
 }
 
 if (out) {
     writeFileSync(out, report + '\n')
-    console.log('laporan ditulis ke ' + out)
+    console.log('report written to ' + out)
 } else {
     console.log(report)
 }

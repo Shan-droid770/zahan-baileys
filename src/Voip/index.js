@@ -1,4 +1,4 @@
-/* Elaina Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
+/* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 import { EventEmitter } from 'node:events';
 import { createHmac, randomBytes } from 'node:crypto';
 import { WasmEngine } from './wasm-engine.js';
@@ -333,7 +333,7 @@ export class VoipClient {
 
             const targetNumber = phoneNumber.replace(/\D/g, "");
             if (!targetNumber) {
-                throw new Error("Nomor target tidak valid.");
+                throw new Error("Invalid target number.");
             }
 
             const targetPnJid = `${targetNumber}@s.whatsapp.net`;
@@ -342,7 +342,7 @@ export class VoipClient {
 
             const peerLid = await this._signaling.resolveLid(targetPnJid);
             if (!peerLid) {
-                throw new Error(`Tidak bisa resolve LID untuk ${targetPnJid}. Pastikan target valid dan sudah tersimpan mapping LID/PN atau USync LID bisa diakses.`);
+                throw new Error(`Could not resolve the LID for ${targetPnJid}. Make sure the target is valid and the LID/PN mapping is stored or USync LID is reachable.`);
             }
 
             const peerJid = peerLid;
@@ -389,7 +389,7 @@ export class VoipClient {
             }
 
             if (!tcToken || !tcToken.length) {
-                this._log("[RTC TC TOKEN WARNING] TC token kosong, lanjut startCall dengan token kosong.");
+                this._log("[RTC TC TOKEN WARNING] TC token is empty, continuing startCall with an empty token.");
                 tcToken = undefined;
             }
 
@@ -642,7 +642,7 @@ export class VoipClient {
 
         this._initVoipStack = async () => {
             if (!this._sock) {
-                throw new Error("Socket Baileys belum tersedia.");
+                throw new Error("Baileys socket is not available yet.");
             }
 
             this._signaling = new SignalingBridge({
@@ -698,7 +698,7 @@ export class VoipClient {
                 "";
 
             if (!selfPnJid) {
-                throw new Error("Tidak bisa membaca JID bot dari socket utama.");
+                throw new Error("Could not read the bot JID from the main socket.");
             }
 
             this._log("[RTC SELF JID]", { selfPnJid, selfLidJid });
@@ -796,12 +796,12 @@ export class VoipClient {
     this._captureStartRequested = true;
 
     if (this._activeCall?.state !== CallState.Active) {
-        this._log("[RTC AUDIO] capture siap, tunggu call active sebelum audio start");
+        this._log("[RTC AUDIO] capture ready, waiting for the call to become active before starting audio");
         return;
     }
 
     if (!this._engine || !this._capturePtr) {
-        this._log("[RTC AUDIO] capturePtr belum siap, audio feeder batal start");
+        this._log("[RTC AUDIO] capturePtr is not ready, audio feeder start cancelled");
         return;
     }
 
@@ -858,7 +858,7 @@ this._startVideoFeeder = (config, useDesktopCapture) => {
     const call = this._activeCall;
     const label = useDesktopCapture ? "SCREEN" : "VIDEO";
     if (!call?._video) {
-        this._log(`[RTC ${label}] capture diminta tapi call ini bukan video, diabaikan`);
+        this._log(`[RTC ${label}] capture requested but this call is not video, ignoring`);
         return;
     }
     if (this._videoFeeder) {
@@ -909,7 +909,7 @@ this._handleAudioCaptureStart = () => {
     if (this._activeCall?.state === CallState.Active) {
         this._startAudioFeeder();
     } else {
-        this._log("[RTC AUDIO] startCaptureJS diterima sebelum active, audio ditahan dulu");
+        this._log("[RTC AUDIO] startCaptureJS received before active, holding audio for now");
     }
 };
 

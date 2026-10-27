@@ -1,7 +1,7 @@
 {
-  "name": "@rexxhayanasi/elaina-baileys",
-  "version": "1.4.8",
-  "description": "Elaina Baileys — an independently maintained Baileys distribution with integrated MessageBuilder, interactive messages, carousel/native-flow helpers, and Elaina-specific compatibility work.",
+  "name": "zahan-baileys",
+  "version": "1.0.0",
+  "description": "Zahan Baileys — a modern WhatsApp Multi-Device library for Node.js with an integrated MessageBuilder, interactive messages, channels and VoIP support. Maintained by SAHAN OFC in Sri Lanka.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "module",
@@ -38,13 +38,18 @@
     "bot",
     "interactive-messages",
     "js-whatsapp",
+    "messagebuilder",
     "multi-device",
+    "sahan-ofc",
+    "sri-lanka",
     "whatsapp",
     "whatsapp-api",
     "whatsapp-bot",
-    "whatsapp-web"
+    "whatsapp-web",
+    "zahan",
+    "zahan-baileys"
   ],
-  "author": "rexxhayanasi",
+  "author": "SAHAN OFC",
   "license": "MIT",
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
@@ -143,5 +148,18 @@
     "tmp": "^0.2.5",
     "underscore": "^1.13.8",
     "yaml@npm:^2.6.1": "^2.8.4"
-  }
+  },
+  "homepage": "https://www.sahanhost.qzz.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shan-droid770/zahan-baileys.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Shan-droid770/zahan-baileys/issues"
+  },
+  "funding": {
+    "type": "individual",
+    "url": "https://www.sahanhost.qzz.io"
+  },
+  "country": "Sri Lanka"
 }

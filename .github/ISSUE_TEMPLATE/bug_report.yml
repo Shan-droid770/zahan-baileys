@@ -1,6 +1,6 @@
 name: Bug Report
 title: "[BUG] "
-description: Report a bug in @rexxhayanasi/elaina-baileys
+description: Report a bug in zahan-baileys
 labels: ["bug"]
 body:
 
@@ -56,7 +56,7 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: I am using the latest Elaina Baileys release or commit.
+        - label: I am using the latest Zahan Baileys release or commit.
           required: true
         - label: I have checked the documentation and found no answer.
           required: true

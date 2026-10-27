@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'docs/**'
-      - 'lib/**/*.d.ts'
+      - 'src/**/*.d.ts'
       - 'script/apiref.js'
       - 'script/builddocs.js'
       - 'script/markdown.js'
@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: elaina-baileys-docs
+  group: zahan-baileys-docs
   cancel-in-progress: true
 
 jobs:
@@ -44,8 +44,8 @@ jobs:
 
       - name: Identify as the repository owner
         run: |
-          git config user.name "RexxHayanasi Pengen S.Kom"
-          git config user.email "150516773+rexxzyid@users.noreply.github.com"
+          git config user.name "SAHAN OFC"
+          git config user.email "176169758+Shan-droid770@users.noreply.github.com"
 
       - name: Publish to the web branch
         run: |
@@ -63,7 +63,7 @@ jobs:
           git add -A
 
           if git diff --staged --quiet; then
-            echo "Situs tidak berubah."
+            echo "Site unchanged."
             exit 0
           fi
 
@@ -77,5 +77,5 @@ jobs:
             git pull --rebase origin web || true
           done
 
-          echo "Push gagal setelah 4 percobaan."
+          echo "Push failed after 4 attempts."
           exit 1

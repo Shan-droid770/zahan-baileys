@@ -38,19 +38,19 @@ test('status-stickers', async () => {
 
     /** Each builder fills exactly one action; the client reads only one per sticker. */
     {
-        const location = locationSticker({ latitude: -6.2088, longitude: 106.8456, name: 'Jakarta' });
+        const location = locationSticker({ latitude: -6.2088, longitude: 106.8456, name: 'Colombo' });
         assert.equal(location.location.degreesLatitude, -6.2088);
-        assert.equal(location.location.name, 'Jakarta');
+        assert.equal(location.location.name, 'Colombo');
         assert.deepEqual(location.polygonVertices[0], { x: STICKER_DEFAULT_AREA.x, y: STICKER_DEFAULT_AREA.y });
 
-        const channel = channelSticker({ jid: '120363000000000000@newsletter', name: 'Elaina' });
+        const channel = channelSticker({ jid: '120363000000000000@newsletter', name: 'Zahan' });
         assert.equal(channel.newsletter.newsletterJid, '120363000000000000@newsletter');
-        assert.equal(channel.newsletter.newsletterName, 'Elaina');
+        assert.equal(channel.newsletter.newsletterName, 'Zahan');
         assert.equal(channel.newsletter.serverMessageId, 0);
 
-        const link = linkSticker({ url: 'https://example.com', title: 'Baca' });
+        const link = linkSticker({ url: 'https://example.com', title: 'Read' });
         assert.equal(link.tapAction.tapUrl, 'https://example.com');
-        assert.equal(link.tapAction.title, 'Baca');
+        assert.equal(link.tapAction.title, 'Read');
         assert.equal(link.statusLinkType, StatusLinkType.RASTERIZED_LINK_PREVIEW);
 
         for (const sticker of [location, channel, link]) {
@@ -63,8 +63,8 @@ test('status-stickers', async () => {
     {
         const music = musicSticker({
             songId: '123',
-            title: 'Lagu',
-            author: 'Penyanyi',
+            title: 'Song',
+            author: 'Singer',
             startTimeMs: 15000,
             durationMs: 30000,
             artworkSha256: Buffer.alloc(32, 1)
@@ -75,9 +75,9 @@ test('status-stickers', async () => {
         assert.equal(music.embeddedContent.embeddedMusic.artworkSha256.length, 32);
         assert.equal(music.location, undefined, 'music is not an action');
 
-        const embedded = messageSticker({ stanzaId: 'ABC', message: { conversation: 'halo' } });
+        const embedded = messageSticker({ stanzaId: 'ABC', message: { conversation: 'hello' } });
         assert.equal(embedded.embeddedContent.embeddedMessage.stanzaId, 'ABC');
-        assert.equal(embedded.embeddedContent.embeddedMessage.message.conversation, 'halo');
+        assert.equal(embedded.embeddedContent.embeddedMessage.message.conversation, 'hello');
     }
 
     /** Missing or ambiguous input fails at build time, not on the wire. */
@@ -85,7 +85,7 @@ test('status-stickers', async () => {
         assert.throws(() => locationSticker({ latitude: -6.2 }), TypeError);
         assert.throws(() => channelSticker({ jid: '628123@s.whatsapp.net' }), TypeError);
         assert.throws(() => linkSticker({}), TypeError);
-        assert.throws(() => musicSticker({ title: 'Lagu' }), TypeError);
+        assert.throws(() => musicSticker({ title: 'Song' }), TypeError);
         assert.throws(() => messageSticker({ stanzaId: 'A' }), TypeError);
 
         assert.throws(() => normalizeStickers([{ polygonVertices: [{ x: 0, y: 0 }], location: {} }]), TypeError, 'needs four corners');
@@ -99,9 +99,9 @@ test('status-stickers', async () => {
     /** They survive the real encoder, which is where a wrong field number would die. */
     {
         const stickers = normalizeStickers([
-            locationSticker({ latitude: -6.2088, longitude: 106.8456, name: 'Jakarta', area: { x: 0.1, y: 0.1, width: 0.4, height: 0.15 } }),
-            linkSticker({ url: 'https://example.com', title: 'Baca', linkType: StatusLinkType.RASTERIZED_LINK_FULL_URL }),
-            musicSticker({ songId: '123', title: 'Lagu', author: 'Penyanyi', durationMs: 30000 })
+            locationSticker({ latitude: -6.2088, longitude: 106.8456, name: 'Colombo', area: { x: 0.1, y: 0.1, width: 0.4, height: 0.15 } }),
+            linkSticker({ url: 'https://example.com', title: 'Read', linkType: StatusLinkType.RASTERIZED_LINK_FULL_URL }),
+            musicSticker({ songId: '123', title: 'Song', author: 'Singer', durationMs: 30000 })
         ]);
         const message = proto.Message.fromObject({
             imageMessage: { url: 'https://mmg.whatsapp.net/x', mimetype: 'image/jpeg', interactiveAnnotations: stickers }
@@ -110,12 +110,12 @@ test('status-stickers', async () => {
         const back = decoded.imageMessage.interactiveAnnotations;
 
         assert.equal(back.length, 3);
-        assert.equal(back[0].location.name, 'Jakarta');
+        assert.equal(back[0].location.name, 'Colombo');
         assert.equal(back[0].polygonVertices.length, 4);
         assert.ok(Math.abs(back[0].polygonVertices[2].x - 0.5) < 1e-9);
         assert.equal(back[1].tapAction.tapUrl, 'https://example.com');
         assert.equal(back[1].statusLinkType, StatusLinkType.RASTERIZED_LINK_FULL_URL);
-        assert.equal(back[2].embeddedContent.embeddedMusic.title, 'Lagu');
+        assert.equal(back[2].embeddedContent.embeddedMusic.title, 'Song');
         assert.equal(Number(back[2].embeddedContent.embeddedMusic.overlapDurationInMs), 30000);
     }
 
@@ -123,8 +123,8 @@ test('status-stickers', async () => {
     {
         const stickers = normalizeStickers([
             locationSticker({ latitude: -6.2088, longitude: 106.8456, area: { x: 0.2, y: 0.3, width: 0.4, height: 0.2 } }),
-            channelSticker({ jid: '120363000000000000@newsletter', name: 'Elaina' }),
-            musicSticker({ songId: '123', title: 'Lagu' })
+            channelSticker({ jid: '120363000000000000@newsletter', name: 'Zahan' }),
+            musicSticker({ songId: '123', title: 'Song' })
         ]);
         const read = readStickers({ imageMessage: { interactiveAnnotations: stickers } });
 
@@ -132,12 +132,12 @@ test('status-stickers', async () => {
         assert.equal(read[0].location.degreesLatitude, -6.2088);
         assert.ok(Math.abs(read[0].area.width - 0.4) < 1e-9);
         assert.ok(Math.abs(read[0].area.height - 0.2) < 1e-9);
-        assert.equal(read[1].channel.newsletterName, 'Elaina');
-        assert.equal(read[2].music.title, 'Lagu');
+        assert.equal(read[1].channel.newsletterName, 'Zahan');
+        assert.equal(read[2].music.title, 'Song');
 
         assert.deepEqual(readStickers({ imageMessage: {} }), []);
         assert.deepEqual(readStickers(undefined), []);
-        assert.deepEqual(readStickers({ conversation: 'halo' }), []);
+        assert.deepEqual(readStickers({ conversation: 'hello' }), []);
     }
 
     /**
@@ -154,16 +154,16 @@ test('status-stickers', async () => {
 
         const image = await generateWAMessageContent({
             image: media,
-            caption: 'halo',
+            caption: 'hello',
             statusStickers: [locationSticker({ latitude: -6.2088, longitude: 106.8456 }), linkSticker({ url: 'https://example.com' })]
         }, options);
         assert.equal(image.imageMessage.interactiveAnnotations.length, 2);
-        assert.equal(image.imageMessage.caption, 'halo');
+        assert.equal(image.imageMessage.caption, 'hello');
         assert.equal('statusStickers' in image.imageMessage, false, 'the option is consumed, not forwarded');
 
         const video = await generateWAMessageContent({
             video: media,
-            statusStickers: musicSticker({ songId: '1', title: 'Lagu' })
+            statusStickers: musicSticker({ songId: '1', title: 'Song' })
         }, options);
         assert.equal(video.videoMessage.interactiveAnnotations.length, 1, 'a single sticker needs no array');
 
@@ -187,8 +187,8 @@ test('status-stickers', async () => {
     {
         const content = buildMusicMessage({
             songId: '123',
-            title: 'Lagu',
-            author: 'Penyanyi',
+            title: 'Song',
+            author: 'Singer',
             durationMs: 30000,
             songUri: 'https://mmg.whatsapp.net/v/song.m4a',
             artworkUri: 'https://mmg.whatsapp.net/v/art.jpg'
@@ -201,22 +201,22 @@ test('status-stickers', async () => {
         const decoded = proto.Message.decode(proto.Message.encode(proto.Message.fromObject({ musicMessage: content })).finish());
         const read = readMusicMessage(decoded);
         assert.equal(read.songId, '123');
-        assert.equal(read.title, 'Lagu');
-        assert.equal(read.author, 'Penyanyi');
+        assert.equal(read.title, 'Song');
+        assert.equal(read.author, 'Singer');
         assert.equal(Number(read.durationMs), 30000);
         assert.equal(read.artworkUri, 'https://mmg.whatsapp.net/v/art.jpg');
         assert.equal(read.style, MusicMessageStyle.VINYL);
 
-        assert.equal(readMusicMessage({ message: { conversation: 'halo' } }), null);
+        assert.equal(readMusicMessage({ message: { conversation: 'hello' } }), null);
         assert.equal(readMusicMessage(undefined), null);
-        assert.throws(() => buildMusicMessage({ title: 'Lagu' }), TypeError, 'still needs a songId or mediaId');
+        assert.throws(() => buildMusicMessage({ title: 'Song' }), TypeError, 'still needs a songId or mediaId');
     }
 
     /** sendMessage takes it as music, next to the other content keys. */
     {
         const { generateWAMessageContent } = await import('../src/Utils/messages.js');
         const content = await generateWAMessageContent(
-            { music: { songId: '123', title: 'Lagu', songUri: 'https://mmg.whatsapp.net/v/song.m4a' } },
+            { music: { songId: '123', title: 'Song', songUri: 'https://mmg.whatsapp.net/v/song.m4a' } },
             { upload: async () => ({}), logger: { debug() {}, warn() {}, info() {} } }
         );
         assert.equal(content.musicMessage.embeddedMusic.songId, '123');
@@ -264,7 +264,7 @@ test('status-stickers', async () => {
             music: {
                 songId: '123456',
                 mediaId: '987654321',
-                title: 'Judul',
+                title: 'Title',
                 songUri: 'https://mmg.whatsapp.net/v/song.m4a',
                 artworkUri: 'https://mmg.whatsapp.net/v/art.jpg'
             }
@@ -293,20 +293,20 @@ test('status-stickers', async () => {
         );
 
         const content = await generateWAMessageContent({
-            song: { audio: Buffer.alloc(4096, 1), artwork, title: 'Judul Lagu', author: 'Penyanyi', url: 'https://example.com/track' }
+            song: { audio: Buffer.alloc(4096, 1), artwork, title: 'Song Title', author: 'Singer', url: 'https://example.com/track' }
         }, options);
 
         assert.ok(content.audioMessage, 'it is an audio message, not a musicMessage');
         const card = content.audioMessage.contextInfo.externalAdReply;
-        assert.equal(card.title, 'Judul Lagu');
-        assert.equal(card.body, 'Penyanyi');
+        assert.equal(card.title, 'Song Title');
+        assert.equal(card.body, 'Singer');
         assert.equal(card.mediaType, 1, 'IMAGE — VIDEO makes the client wait for a video and draw no thumbnail');
         assert.equal(card.renderLargerThumbnail, true);
         assert.equal(card.showAdAttribution, false);
         assert.equal(card.sourceUrl, 'https://example.com/track');
         assert.ok(card.thumbnail.length > 0 && card.thumbnail.length < artwork.length * 40, 'the cover is downscaled, not passed whole');
 
-        const bare = await generateWAMessageContent({ song: { audio: Buffer.alloc(4096, 1), title: 'Tanpa sampul' } }, options);
+        const bare = await generateWAMessageContent({ song: { audio: Buffer.alloc(4096, 1), title: 'Without cover' } }, options);
         assert.equal(bare.audioMessage.contextInfo.externalAdReply.thumbnail, undefined, 'artwork is optional');
         assert.equal('body' in bare.audioMessage.contextInfo.externalAdReply, false, 'so is the artist');
 
@@ -324,7 +324,7 @@ test('status-stickers', async () => {
             return { audio: content.audioMessage, warnings };
         };
 
-        const asMp3 = await asVoiceNote({ audio: Buffer.alloc(4096, 1), artwork, title: 'Judul', ptt: true });
+        const asMp3 = await asVoiceNote({ audio: Buffer.alloc(4096, 1), artwork, title: 'Title', ptt: true });
         assert.equal(asMp3.audio.ptt, true, 'ptt falls through to the audio upload');
         assert.ok(asMp3.audio.contextInfo.externalAdReply.thumbnail.length > 0, 'and the card survives');
         assert.ok(asMp3.warnings.some(message => /not opus/.test(message)), 'but mp3 is not what a voice note is made of');
@@ -340,7 +340,7 @@ test('status-stickers', async () => {
 
 test('status-style', async () => {
     const base = { upload: async () => ({ mediaUrl: 'https://media.test/x', directPath: '/x' }), logger: { info() {}, debug() {}, warn() {}, error() {}, trace() {}, child() { return this } } };
-    const text = (options) => generateWAMessage('status@broadcast', { text: 'Halo' }, { ...base, ...options });
+    const text = (options) => generateWAMessage('status@broadcast', { text: 'Hello' }, { ...base, ...options });
     const argb = value => (value >>> 0).toString(16).padStart(8, '0');
 
     /** The font enum is the client's own, not the media editor's five-font list. */
@@ -405,7 +405,7 @@ test('status-style', async () => {
     {
         const { message } = await generateWAMessage(
             '120363000000000000@g.us',
-            { text: 'halo grup', groupStatus: true },
+            { text: 'hello group', groupStatus: true },
             { ...base, backgroundColor: '#7C3AED', textColor: '#FFEE58', font: StatusFont.EXO2_EXTRABOLD }
         );
         assert.deepEqual(Object.keys(message).sort(), ['groupStatusMessageV2', 'messageContextInfo']);
@@ -431,7 +431,7 @@ test('status-style', async () => {
          * in the same try as the duration and waveform passes. Those shell out and
          * fail on a host with no decoder, which silently took the colour with them.
          */
-        const audio = join(dir, 'suara.ogg');
+        const audio = join(dir, 'sound.ogg');
         writeFileSync(audio, Buffer.from('T2dnUwACAAAAAAAAAAA=', 'base64'));
 
         const { message } = await generateWAMessage(
@@ -504,7 +504,7 @@ test('status-add-yours', async () => {
 
     /** addYours lands in messageContextInfo, where the client reads it. */
     {
-        const { message } = await build('status@broadcast', { text: 'ikutan', addYours: key });
+        const { message } = await build('status@broadcast', { text: 'join', addYours: key });
         const association = message.messageContextInfo.messageAssociation;
         assert.equal(association.associationType, AssociationType.STATUS_ADD_YOURS);
         assert.deepEqual({ ...association.parentMessageKey }, key);
@@ -586,13 +586,13 @@ test('status-add-yours', async () => {
      */
     {
         const withUser = { ...base, userJid: '628999:12@s.whatsapp.net' };
-        const own = await generateWAMessage('status@broadcast', { text: 'halo semua' }, withUser);
+        const own = await generateWAMessage('status@broadcast', { text: 'hello everyone' }, withUser);
         assert.equal(own.key.remoteJid, 'status@broadcast');
         assert.equal(own.key.fromMe, true);
         assert.equal(own.key.participant, null, 'your own status names no participant');
         assert.ok(own.message && own.messageTimestamp, 'the whole WebMessageInfo comes back, not just a key');
 
-        const group = await generateWAMessage('120363000000000000@g.us', { text: 'halo grup', groupStatus: true }, withUser);
+        const group = await generateWAMessage('120363000000000000@g.us', { text: 'hello group', groupStatus: true }, withUser);
         assert.equal(group.key.remoteJid, '120363000000000000@g.us');
         assert.equal(group.key.fromMe, true);
     }
@@ -635,14 +635,14 @@ test('status-audience', async () => {
     {
         assert.equal(makeStatusAudienceMetadata({ audienceType: 'UNKNOWN' }).audienceType, AudienceType.UNKNOWN);
         assert.equal(makeStatusAudienceMetadata({ audienceType: 0 }).audienceType, AudienceType.UNKNOWN);
-        assert.equal(makeStatusAudienceMetadata({ audienceType: 'bukan enum' }).audienceType, AudienceType.CLOSE_FRIENDS);
+        assert.equal(makeStatusAudienceMetadata({ audienceType: 'not an enum' }).audienceType, AudienceType.CLOSE_FRIENDS);
         assert.throws(() => makeStatusAudienceMetadata(42), TypeError);
     }
 
     /** statusAudience is a shorthand for the contextInfo field, and lands on the message. */
     {
         const { message } = await build('status@broadcast', {
-            text: 'Halo besties',
+            text: 'Hello besties',
             statusAudience: { listName: 'Besties', listEmoji: '💜' }
         });
         const meta = message.extendedTextMessage.contextInfo.statusAudienceMetadata;
@@ -655,7 +655,7 @@ test('status-audience', async () => {
     /** Writing contextInfo yourself works too, and the shorthand does not stomp on it. */
     {
         const { message } = await build('status@broadcast', {
-            text: 'Halo',
+            text: 'Hello',
             statusAudience: { listName: 'Besties' },
             contextInfo: { isForwarded: true }
         });
@@ -666,7 +666,7 @@ test('status-audience', async () => {
     /** It survives the wire, which is the only proof that matters. */
     {
         const { message } = await build('status@broadcast', {
-            text: 'Halo besties',
+            text: 'Hello besties',
             statusAudience: { listName: 'Besties', listEmoji: '💜' }
         });
         const decoded = proto.Message.decode(proto.Message.encode(message).finish());
@@ -683,7 +683,7 @@ test('status-audience', async () => {
      */
     {
         const { message } = await build('120363000000000000@g.us', {
-            text: 'halo grup',
+            text: 'hello group',
             groupStatus: true,
             statusAudience: { listName: 'Besties', listEmoji: '💜' }
         });
@@ -691,7 +691,7 @@ test('status-audience', async () => {
         const inner = message.groupStatusMessageV2.message.extendedTextMessage;
         assert.equal(inner.contextInfo.isGroupStatus, true);
         assert.equal(inner.contextInfo.statusAudienceMetadata.listName, 'Besties');
-        assert.equal(normalizeMessageContent(message).extendedTextMessage.text, 'halo grup');
+        assert.equal(normalizeMessageContent(message).extendedTextMessage.text, 'hello group');
     }
 
     /** A status attribution and an audience are independent, and both land. */

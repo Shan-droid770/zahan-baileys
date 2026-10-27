@@ -140,41 +140,41 @@ export const diffSnapshots = async (beforeDir, afterDir) => {
 }
 
 const bullet = (values, limit = 40) => {
-    if (!values.length) return '  _(tidak ada)_'
+    if (!values.length) return '  _(none)_'
     const shown = values.slice(0, limit).map(value => `  - \`${value}\``)
-    if (values.length > limit) shown.push(`  - _…dan ${values.length - limit} lainnya_`)
+    if (values.length > limit) shown.push(`  - _…and ${values.length - limit} more_`)
     return shown.join('\n')
 }
 
 const LABELS = {
-    modules: 'Modul',
-    stanzaTags: 'Tag stanza (smax)',
-    stanzaAttrs: 'Atribut stanza',
-    xmlns: 'Namespace (xmlns)',
-    waMexOperations: 'Operasi MEX WhatsApp (w:mex)',
-    mexOperations: 'Operasi Relay (semua, termasuk UI Facebook)',
-    mediaPaths: 'Path media',
+    modules: 'Modules',
+    stanzaTags: 'Stanza tags (smax)',
+    stanzaAttrs: 'Stanza attributes',
+    xmlns: 'Namespaces (xmlns)',
+    waMexOperations: 'WhatsApp MEX operations (w:mex)',
+    mexOperations: 'Relay operations (all, including Facebook UI)',
+    mediaPaths: 'Media paths',
     flags: 'Flag / feature string'
 }
 
 export const renderReport = report => {
     const lines = []
-    lines.push(`# Diff bundle WhatsApp Web`)
+    lines.push(`# WhatsApp Web bundle diff`)
     lines.push('')
-    lines.push(`- Sebelum: revisi \`${report.before.revision ?? 'tidak tercatat'}\` (${report.before.directory})`)
-    lines.push(`- Sesudah: revisi \`${report.after.revision ?? 'tidak tercatat'}\` (${report.after.directory})`)
-    lines.push(`- Menyentuh protokol: **${report.protocolTouched ? 'YA' : 'TIDAK'}**`)
+    lines.push(`- Before: revision \`${report.before.revision ?? 'unrecorded'}\` (${report.before.directory})`)
+    lines.push(`- After: revision \`${report.after.revision ?? 'unrecorded'}\` (${report.after.directory})`)
+    lines.push(`- Touches the protocol: **${report.protocolTouched ? 'YES' : 'NO'}**`)
     lines.push('')
 
     lines.push('## Protobuf')
     lines.push('')
-    lines.push(`Field \`Message\` baru (${report.proto.messageFields.added.length}):`)
+    lines.push(`New \`Message\` fields (${report.proto.messageFields.added.length}):`)
     lines.push(bullet(report.proto.messageFields.added))
     lines.push('')
-    lines.push(`Tipe baru (${report.proto.newTypes.length}):`)
+    lines.push(`New types (${report.proto.newTypes.length}):`)
     lines.push(bullet(report.proto.newTypes.map(entry => `${entry.type}: ${entry.fields.join(', ')}`), 25))
     lines.push('')
-    lines.push(`Tipe dengan field tambahan (${report.proto.changedTypes.length}):`)
+    lines.push(`Types with added fields (${report.proto.changedTypes.length}):`)
     lines.push(bullet(report.proto.changedTypes.map(entry => `${entry.type}: ${entry.fields.join(', ')}`), 25))
     lines.push('')
 
@@ -182,12 +182,12 @@ export const renderReport = report => {
         const surface = report.surfaces[key]
         lines.push(`## ${label}`)
         lines.push('')
-        lines.push(`Total sekarang: ${surface.total}`)
+        lines.push(`Current total: ${surface.total}`)
         lines.push('')
-        lines.push(`Ditambah (${surface.added.length}):`)
+        lines.push(`Added (${surface.added.length}):`)
         lines.push(bullet(surface.added))
         lines.push('')
-        lines.push(`Dihapus (${surface.removed.length}):`)
+        lines.push(`Removed (${surface.removed.length}):`)
         lines.push(bullet(surface.removed))
         lines.push('')
     }
@@ -200,7 +200,7 @@ const isMain = process.argv[1] && process.argv[1].endsWith('diffbundle.js')
 if (isMain) {
     const [beforeDir, afterDir] = process.argv.slice(2).filter(argument => !argument.startsWith('--'))
     if (!beforeDir || !afterDir) {
-        console.error('Usage: node script/diffbundle.js <snapshot-lama> <snapshot-baru> [--json file] [--markdown file]')
+        console.error('Usage: node script/diffbundle.js <old-snapshot> <new-snapshot> [--json file] [--markdown file]')
         process.exit(2)
     }
     const report = await diffSnapshots(beforeDir, afterDir)

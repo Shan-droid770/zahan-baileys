@@ -67,7 +67,7 @@ console.log('participantAlt:', key.participantAlt)
 Normalise with the built-in helpers rather than string surgery:
 
 ```js
-import { jidDecode, jidEncode, jidNormalizedUser } from '@rexxhayanasi/elaina-baileys'
+import { jidDecode, jidEncode, jidNormalizedUser } from 'zahan-baileys'
 
 const normalized = jidNormalizedUser(jid)
 const decoded = jidDecode(jid)
@@ -82,7 +82,7 @@ const decoded = jidDecode(jid)
 
 ```js
 await sock.sendMessage(jid, {
-  text: 'Hello from Elaina 💜'
+  text: 'Hello from Zahan 💜'
 })
 ```
 
@@ -91,7 +91,7 @@ await sock.sendMessage(jid, {
 ```js
 await sock.sendMessage(jid, {
   image: { url: 'https://example.com/image.jpg' },
-  caption: 'Elaina Image'
+  caption: 'Zahan Image'
 })
 ```
 
@@ -102,7 +102,7 @@ Media accepts `{ url }` for a remote file or a local path, and also a `Buffer` a
 ```js
 await sock.sendMessage(jid, {
   video: { url: 'https://example.com/video.mp4' },
-  caption: 'Elaina Video'
+  caption: 'Zahan Video'
 })
 ```
 
@@ -123,10 +123,10 @@ await sock.sendMessage(jid, {
 ```js
 await sock.sendMessage(jid, {
   location: {
-    degreesLatitude: -6.200000,
-    degreesLongitude: 106.816666,
-    name: 'Jakarta',
-    address: 'Jakarta, Indonesia'
+    degreesLatitude: 6.927079,
+    degreesLongitude: 79.861243,
+    name: 'Colombo',
+    address: 'Colombo, Sri Lanka'
   }
 })
 ```
@@ -154,8 +154,8 @@ await sock.sendMessage(jid, {
   poll: {
     name: 'Which cover?',
     values: [
-      { name: 'Jakarta', image: { url: './jakarta.jpg' } },
-      { name: 'Bandung', image: { url: './bandung.jpg' } }
+      { name: 'Colombo', image: { url: './colombo.jpg' } },
+      { name: 'Kandy', image: { url: './kandy.jpg' } }
     ],
     selectableCount: 1
   }
@@ -165,7 +165,7 @@ await sock.sendMessage(jid, {
 String options and image options can be mixed. Plain strings still send a normal text poll.
 
 > [!NOTE]
-> Photo polls are verified **Offline** — the proto is confirmed locally but has not been run against WhatsApp's servers. See [EXPERIMENTAL.md](https://github.com/rexxzyid/elaina-baileys/blob/main/EXPERIMENTAL.md).
+> Photo polls are verified **Offline** — the proto is confirmed locally but has not been run against WhatsApp's servers. See [EXPERIMENTAL.md](https://github.com/Shan-droid770/zahan-baileys/blob/main/EXPERIMENTAL.md).
 
 ## Replying and quoting
 
@@ -181,14 +181,14 @@ await sock.sendMessage(jid, { text: 'pong' }, { quoted: message })
 
 ```js
 await sock.sendMessage(jid, {
-  text: 'Elaina Baileys',
+  text: 'Zahan Baileys',
   contextInfo: {
     externalAdReply: {
-      title: 'Elaina Baileys',
+      title: 'Zahan Baileys',
       body: 'Modern WhatsApp Multi-Device library',
       mediaType: 1,
-      thumbnailUrl: 'https://example.com/elaina.jpg',
-      sourceUrl: 'https://www.npmjs.com/package/@rexxhayanasi/elaina-baileys',
+      thumbnailUrl: 'https://example.com/zahan.jpg',
+      sourceUrl: 'https://www.npmjs.com/package/zahan-baileys',
       renderLargerThumbnail: true,
       showAdAttribution: false
     }

@@ -6,7 +6,7 @@ A group JID ends in `@g.us`. Participants are addressed by their user JID — wh
 
 ```js
 const group = await sock.groupCreate(
-  'Elaina Community',
+  'Zahan Community',
   [
     '6281234567890@s.whatsapp.net',
     '6289876543210@s.whatsapp.net'
@@ -37,7 +37,7 @@ It takes an array, so batch changes in one call rather than looping.
 ## Metadata and settings
 
 ```js
-await sock.groupUpdateDescription(groupJid, 'Welcome to Elaina Community 💜')
+await sock.groupUpdateDescription(groupJid, 'Welcome to Zahan Community 💜')
 ```
 
 The socket also exposes group metadata, subject updates, settings, invite codes and join-request handling. They are listed in full under **Groups** in the [API reference](./api.html#group).
@@ -47,7 +47,7 @@ The socket also exposes group metadata, subject updates, settings, invite codes 
 Communities are groups that contain other groups. They have their own set of methods, all prefixed `community`:
 
 ```js
-const community = await sock.communityCreate('Elaina Community', 'Description')
+const community = await sock.communityCreate('Zahan Community', 'Description')
 
 await sock.communityLinkGroup(groupJid, parentCommunityJid)
 await sock.communityUnlinkGroup(groupJid, parentCommunityJid)

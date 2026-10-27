@@ -56,7 +56,10 @@ const renderApi = (api, language) => {
 
 const layout = ({ language, page, body, headings, api }) => {
     const strings = meta.strings[language]
-    const other = language === 'en' ? 'id' : 'en'
+    const other = meta.languages.find(entry => entry !== language)
+    const languageLink = other
+        ? `<a class="lang" href="../${other}/${page.id}.html">${other.toUpperCase()}</a>\n    `
+        : ''
     const nav = meta.pages.map(entry => {
         const active = entry.id === page.id ? ' class="active"' : ''
         return `<a href="./${entry.id}.html"${active}>${escapeHtml(entry.title[language])}</a>`
@@ -107,8 +110,7 @@ const layout = ({ language, page, body, headings, api }) => {
   <a class="brand" href="./index.html"><span class="brand-mark">💜</span><span>${escapeHtml(meta.site.name)}</span></a>
   <span class="version">v${escapeHtml(pkg.version)}</span>
   <div class="topbar-actions">
-    <a class="lang" href="../${other}/${page.id}.html">${other.toUpperCase()}</a>
-    <button class="theme" type="button" data-theme-toggle aria-label="Theme">◐</button>
+    ${languageLink}<button class="theme" type="button" data-theme-toggle aria-label="Theme">◐</button>
     <a class="ghlink" href="${escapeHtml(meta.site.repository)}" rel="noreferrer">GitHub</a>
   </div>
 </header>
@@ -117,6 +119,7 @@ const layout = ({ language, page, body, headings, api }) => {
     <nav>${nav}</nav>
     <div class="sidebar-foot">
       <a href="${escapeHtml(meta.site.npm)}" rel="noreferrer">npm</a>
+      <a href="${escapeHtml(meta.site.website)}" rel="noreferrer">Official site</a>
       <a href="${escapeHtml(meta.site.repository)}/blob/main/EXPERIMENTAL.md" rel="noreferrer">EXPERIMENTAL.md</a>
     </div>
   </aside>
@@ -180,11 +183,10 @@ writeFileSync(join(out, 'index.html'), `<!doctype html>
 <link rel="canonical" href="./en/index.html">
 <meta http-equiv="refresh" content="0; url=./en/index.html">
 <script>
-const preferred = (navigator.language || 'en').toLowerCase().startsWith('id') ? 'id' : 'en'
-location.replace('./' + preferred + '/index.html')
+location.replace('./en/index.html')
 </script>
 </head>
-<body><p><a href="./en/index.html">English</a> · <a href="./id/index.html">Bahasa Indonesia</a></p></body>
+<body><p><a href="./en/index.html">Zahan Baileys documentation</a></p></body>
 </html>
 `)
 

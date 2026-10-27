@@ -257,7 +257,7 @@ test('auth-state-sqlite', async () => {
         console.log('sqlite auth state tests skipped, better-sqlite3 is not installed');
     }
     else {
-        const dir = mkdtempSync(join(tmpdir(), 'elaina-sqlite-auth-'));
+        const dir = mkdtempSync(join(tmpdir(), 'zahan-sqlite-auth-'));
         const dbPath = join(dir, 'session.db');
         try {
             const auth = await useSqliteAuthState({ dbPath });
@@ -511,7 +511,7 @@ test('apk-proto-fields', async () => {
     assert.equal(album.expectedVideoCount, 1);
 
     const button = round(proto.HydratedTemplateButton.HydratedURLButton, {
-        displayText: 'buka',
+        displayText: 'open',
         url: 'https://example.com',
         consentedUsersUrl: 'https://example.com/c',
         webviewPresentation: 1,
@@ -540,10 +540,10 @@ test('apk-proto-fields', async () => {
 
     const upload = async () => ({});
     const withCaption = await generateWAMessageContent(
-        { album: [{ image: { url: 'a' } }, { image: { url: 'b' } }], caption: 'judul album' },
+        { album: [{ image: { url: 'a' } }, { image: { url: 'b' } }], caption: 'album caption' },
         { upload }
     );
-    assert.equal(withCaption.albumMessage.caption, 'judul album');
+    assert.equal(withCaption.albumMessage.caption, 'album caption');
     assert.equal(withCaption.albumMessage.expectedImageCount, 2);
 
     const withoutCaption = await generateWAMessageContent(

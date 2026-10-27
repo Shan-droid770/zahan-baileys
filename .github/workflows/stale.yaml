@@ -1,4 +1,4 @@
-name: Elaina stale issue cleanup
+name: Zahan stale issue cleanup
 
 on:
   schedule:
@@ -17,8 +17,8 @@ jobs:
       - uses: actions/stale@v10
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          stale-issue-message: 'This Elaina Baileys issue is stale because it has had no activity for 3 days.'
-          stale-pr-message: 'This Elaina Baileys PR is stale because it has had no activity for 3 days.'
+          stale-issue-message: 'This Zahan Baileys issue is stale because it has had no activity for 3 days.'
+          stale-pr-message: 'This Zahan Baileys PR is stale because it has had no activity for 3 days.'
           close-issue-message: 'Closing this issue due to inactivity for more than 1 days.'
           close-pr-message: 'Closing this PR due to inactivity for more than 1 days.'
           stale-issue-label: 'stale'

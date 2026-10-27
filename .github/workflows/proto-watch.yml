@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: 'Terapkan pembaruan versi dan perubahan proto'
+        description: 'Apply the version bump and proto changes'
         required: true
         default: 'true'
         type: choice
@@ -20,7 +20,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: elaina-baileys-proto-watch
+  group: zahan-baileys-proto-watch
   cancel-in-progress: false
 
 jobs:
@@ -56,8 +56,8 @@ jobs:
 
       - name: Configure Git identity
         run: |
-          git config user.name "RexxHayanasi Pengen S.Kom"
-          git config user.email "150516773+rexxzyid@users.noreply.github.com"
+          git config user.name "SAHAN OFC"
+          git config user.email "176169758+Shan-droid770@users.noreply.github.com"
 
       - name: Restore previous bundle snapshot
         uses: actions/cache@v4
@@ -90,7 +90,7 @@ jobs:
             const path = ".wa-bundle/report.json"
 
             if (!fs.existsSync(path)) {
-              console.log("Laporan tidak tersedia.")
+              console.log("Report unavailable.")
               fs.appendFileSync(process.env.GITHUB_OUTPUT, "verdict=crashed\n")
               process.exit(0)
             }
@@ -116,7 +116,7 @@ jobs:
           if [ -f .wa-bundle/report.md ]; then
             cat .wa-bundle/report.md >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Laporan tidak dihasilkan." >> "$GITHUB_STEP_SUMMARY"
+            echo "No report was generated." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Update WhatsApp client version
@@ -145,7 +145,7 @@ jobs:
         if: always()
         run: |
           if git diff --quiet -- WAProto; then
-            echo "WAProto tidak berubah karena tidak ada field protobuf baru."
+            echo "WAProto unchanged: no new protobuf fields."
           else
             git diff --stat -- WAProto
           fi
@@ -161,12 +161,12 @@ jobs:
           git add -A
 
           if git diff --cached --name-only | grep -Eq '^(node_modules/|\.wa-bundle/|proto-sync\.txt$|package-lock\.json$)'; then
-            echo "File terlarang terdeteksi pada staging."
+            echo "Forbidden files detected in staging."
             exit 1
           fi
 
           if git diff --staged --quiet; then
-            echo "Tidak ada perubahan untuk di-commit."
+            echo "No changes to commit."
             exit 0
           fi
 
@@ -190,7 +190,7 @@ jobs:
             sleep $((2 ** attempt))
           done
 
-          echo "Push gagal setelah 4 percobaan."
+          echo "Push failed after 4 attempts."
           exit 1
 
       - name: Report automation failure
@@ -212,7 +212,7 @@ jobs:
 
             const read = path => {
               if (!fs.existsSync(path)) {
-                return "(tidak ada keluaran)"
+                return "(no output)"
               }
 
               return fs.readFileSync(path, "utf8").trim()
@@ -224,40 +224,40 @@ jobs:
             const syncOutcome = process.env.SYNC_OUTCOME
             const verifyOutcome = process.env.VERIFY_OUTCOME
 
-            let reason = `Verdict: ${verdict || "tidak tersedia"}`
+            let reason = `Verdict: ${verdict || "unavailable"}`
 
             if (reportOutcome === "failure" || verdict === "crashed") {
-              reason = "Pipeline gagal menghasilkan laporan pembaruan."
+              reason = "The pipeline failed to produce an update report."
             } else if (verdict === "blocked") {
-              reason = "Round-trip encoder gagal sehingga perubahan tidak di-push."
+              reason = "Round-trip encoder failed, so changes were not pushed."
             } else if (versionOutcome === "failure") {
-              reason = "Pembaruan versi WhatsApp gagal."
+              reason = "WhatsApp version update failed."
             } else if (syncOutcome === "failure") {
-              reason = "Sinkronisasi WAProto gagal."
+              reason = "WAProto sync failed."
             } else if (verifyOutcome === "failure") {
-              reason = "WAProto gagal melewati verifikasi round-trip."
+              reason = "WAProto failed round-trip verification."
             } else if (verdict === "bump-and-review") {
-              reason = "Revisi dan permukaan protokol berubah sehingga perlu diperiksa."
+              reason = "The revision and a protocol surface changed, so a review is needed."
             }
 
             const body = [
               reason,
               "",
-              `- Revisi terpasang: \`${process.env.PINNED_REVISION || "tidak tersedia"}\``,
-              `- Revisi live: \`${process.env.LIVE_REVISION || "tidak tersedia"}\``,
-              `- Celah protobuf: ${process.env.PROTO_GAPS || "tidak tersedia"}`,
-              `- Round-trip laporan: ${process.env.VERIFY_PASSED || "tidak tersedia"}`,
+              `- Pinned revision: \`${process.env.PINNED_REVISION || "unavailable"}\``,
+              `- Live revision: \`${process.env.LIVE_REVISION || "unavailable"}\``,
+              `- Protobuf gaps: ${process.env.PROTO_GAPS || "unavailable"}`,
+              `- Report round-trip: ${process.env.VERIFY_PASSED || "unavailable"}`,
               `- updatewa.js: ${versionOutcome}`,
               `- syncproto.js: ${syncOutcome}`,
               `- verifyproto.js: ${verifyOutcome}`,
               "",
-              "<details><summary>Laporan lengkap</summary>",
+              "<details><summary>Full report</summary>",
               "",
               read(".wa-bundle/report.md"),
               "",
               "</details>",
               "",
-              "<details><summary>Keluaran sinkronisasi</summary>",
+              "<details><summary>Sync output</summary>",
               "",
               "```",
               read("proto-sync.txt"),
@@ -265,7 +265,7 @@ jobs:
               "",
               "</details>",
               "",
-              "Reproduksi lokal:",
+              "Reproduce locally:",
               "",
               "```bash",
               "node ./script/waupdate.js --apply --keep 2",

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="Zahan Baileys — WhatsApp Multi-Device library for Node.js">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#150e2b"/>
+      <stop offset="55%" stop-color="#241546"/>
+      <stop offset="100%" stop-color="#3b1d63"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#25D366"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="420" rx="26" fill="url(#bg)"/>
+  <rect width="1200" height="420" rx="26" fill="url(#grid)"/>
+  <circle cx="1010" cy="120" r="130" fill="#a78bfa" opacity="0.30" filter="url(#glow)"/>
+  <circle cx="1090" cy="330" r="90" fill="#25D366" opacity="0.22" filter="url(#glow)"/>
+
+  <rect x="64" y="54" width="472" height="6" rx="3" fill="url(#accent)"/>
+
+  <g font-family="DejaVu Sans, Helvetica, Arial, sans-serif">
+    <circle cx="78" cy="104" r="8" fill="#25D366"/>
+    <text x="100" y="111" fill="#c9b8f5" font-size="20" letter-spacing="4">WHATSAPP MULTI-DEVICE LIBRARY</text>
+
+    <text x="64" y="206" fill="#ffffff" font-size="78" font-weight="700">zahan-baileys</text>
+    <text x="68" y="254" fill="#d9cef7" font-size="25">Interactive messages · MessageBuilder · Channels · VoIP</text>
+
+    <g font-size="19" font-family="DejaVu Sans Mono, monospace">
+      <rect x="64" y="292" width="112" height="40" rx="20" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.20"/>
+      <text x="86" y="318" fill="#ffffff">v1.0.0</text>
+      <rect x="186" y="292" width="80" height="40" rx="20" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.20"/>
+      <text x="208" y="318" fill="#ffffff">ESM</text>
+      <rect x="276" y="292" width="168" height="40" rx="20" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.20"/>
+      <text x="298" y="318" fill="#ffffff">Node.js 20+</text>
+      <rect x="454" y="292" width="82" height="40" rx="20" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.20"/>
+      <text x="476" y="318" fill="#ffffff">MIT</text>
+    </g>
+
+    <text x="64" y="382" fill="#b9a8e6" font-size="20">SAHAN OFC · Sri Lanka 🇱🇰 · www.sahanhost.qzz.io</text>
+  </g>
+</svg>

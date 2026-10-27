@@ -65,7 +65,7 @@ A custom pairing code must be exactly **8 characters**. Shorter or longer is rej
 ```js
 const code = await sock.requestPairingCode(
   '6281234567890',
-  'ELAINA01'
+  'ZAHAN01'
 )
 
 console.log(code)

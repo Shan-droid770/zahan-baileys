@@ -13,7 +13,7 @@ sock.ev.on('creds.update', saveCreds)
 One folder, one file per key. Simple, dependency-free, and the right call for a single bot on a single machine.
 
 ```js
-import { useMultiFileAuthState } from '@rexxhayanasi/elaina-baileys'
+import { useMultiFileAuthState } from 'zahan-baileys'
 
 const { state, saveCreds } = await useMultiFileAuthState('./session')
 ```
@@ -25,7 +25,7 @@ It writes many small files — a busy account produces thousands of pre-key file
 Everything in one JSON file. Easier to back up or move between hosts, but it slows down as the key set grows because the whole file is rewritten on every change.
 
 ```js
-import { useSingleFileAuthState } from '@rexxhayanasi/elaina-baileys'
+import { useSingleFileAuthState } from 'zahan-baileys'
 
 const { state, saveCreds } = await useSingleFileAuthState('./session.json')
 ```
@@ -39,7 +39,7 @@ npm i better-sqlite3
 ```
 
 ```js
-import { useSqliteAuthState } from '@rexxhayanasi/elaina-baileys'
+import { useSqliteAuthState } from 'zahan-baileys'
 
 const { state, saveCreds } = await useSqliteAuthState({ dbPath: './session.db' })
 ```
@@ -72,7 +72,7 @@ import {
   useMySQLAuthState,
   useMongoAuthState,
   useRedisAuthState
-} from '@rexxhayanasi/elaina-baileys'
+} from 'zahan-baileys'
 
 const pg = await usePostgresAuthState({
   connectionString: 'postgres://user:pass@localhost:5432/bot'
@@ -119,12 +119,12 @@ Rename them with `table`, `collectionName`, or `prefix`. The SQL backends write 
 For bots whose state already lives in NekoDB, so the session rides along with the rest of the data.
 
 ```js
-import { useNekoDBAuth } from '@rexxhayanasi/elaina-baileys'
+import { useNekoDBAuth } from 'zahan-baileys'
 
 const { state, saveCreds } = await useNekoDBAuth(db)
 ```
 
-The first argument must be a connected NekoDB instance; the collection defaults to `baileys_elaina_auth`. Pass a second argument to keep several sessions in one database:
+The first argument must be a connected NekoDB instance; the collection defaults to `baileys_zahan_auth`. Pass a second argument to keep several sessions in one database:
 
 ```js
 const { state, saveCreds } = await useNekoDBAuth(db, 'my_sessions')
@@ -135,7 +135,7 @@ const { state, saveCreds } = await useNekoDBAuth(db, 'my_sessions')
 Every backend reads keys from disk or the database on each decryption. Wrapping the key store in a cache removes that trip:
 
 ```js
-import makeWASocket, { makeCacheableSignalKeyStore, useMultiFileAuthState } from '@rexxhayanasi/elaina-baileys'
+import makeWASocket, { makeCacheableSignalKeyStore, useMultiFileAuthState } from 'zahan-baileys'
 import pino from 'pino'
 
 const logger = pino({ level: 'silent' })
@@ -157,7 +157,7 @@ Worth it on any backend, and all but required on the file-based ones for a busy 
 Auth state holds keys, not conversations. For chats, contacts, and message history, attach an in-memory store:
 
 ```js
-import { makeInMemoryStore } from '@rexxhayanasi/elaina-baileys'
+import { makeInMemoryStore } from 'zahan-baileys'
 
 const store = makeInMemoryStore({ logger })
 store.readFromFile('./store.json')
