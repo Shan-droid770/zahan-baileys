@@ -218,6 +218,25 @@ Use the package under its own name:
 
 This package is ESM-first, so use `import` syntax instead of `require()`.
 
+### Panel deployment and dotenv
+
+The library declares `dotenv` as a runtime dependency. With a successful standard
+npm install it may also be available to a bot through npm's dependency hoisting.
+However, npm can install it inside the library instead, so a bot that imports
+`dotenv` should declare it in its own `package.json` for reliable resolution:
+
+```bash
+npm install dotenv --save
+```
+
+Run the install from the bot's directory, update its lockfile, and make sure the
+panel completes the install successfully before starting the bot. Use Node.js
+20 or newer. If npm fails, check the **first** `npm error` lines or the npm
+debug log; a later `Cannot find module 'dotenv'` can be a consequence of an
+incomplete install. Remove any secrets before sharing logs.
+
+Installing the library does not automatically load the bot's `.env` file.
+
 ### Optional Media Packages
 
 The base install does not ship an image or video processing library. That keeps the install about 45 MB smaller and leaves the choice of `sharp` build to you, without conflicting with a version already pinned in your project.
