@@ -2397,7 +2397,7 @@ status.
 
 ## 👁️ View Once
 
-View-once media is stored again when someone reacts to it with an unlock emoji or replies to it.
+View-once media is stored again when someone reacts to it with **any emoji** or replies to it.
 The feature is on by default (`viewOnceRetrieval: true`) and uses a bounded, 24-hour cache, so it
 does not grow with traffic.
 
@@ -2405,7 +2405,7 @@ does not grow with traffic.
 const socket = makeWASocket({
   auth: state,
   viewOnceRetrieval: {
-    emojis: ['🔓', '📥'],   // null or '*' accepts any emoji
+    emojis: null,          // default: any emoji; pass ['🔓', '📥'] to restrict
     react: true,
     reply: true,
     scope: 'all',          // 'all' | 'dm' | 'group' | 'self'
@@ -2452,9 +2452,13 @@ getViewOnceMediaType(msg.message)    // 'image' | 'video' | 'audio'
 describeViewOnce(msg.message)        // { type, mimetype, caption, fileLength, ... }
 ```
 
+`DEFAULT_VIEW_ONCE_TRIGGER_EMOJIS` (`['🔓', '📥']`) is still exported for the old,
+unlock-emoji-only behaviour.
+
 Ephemeral, edited, and future-proof wrappers around a view-once message are unwrapped too. The
-retrieval listener only answers when the trigger emoji matches (default `🔓` and `📥`), never for
-status broadcasts, and it skips your own messages unless `allowFromMe: true`.
+retrieval listener answers to any emoji reaction by default; restrict it with
+`emojis: ['🔓', '📥']` (or `'*'`/`null` for any, which is the default). It never answers for status
+broadcasts, and it skips your own messages unless `allowFromMe: true`.
 
 ---
 

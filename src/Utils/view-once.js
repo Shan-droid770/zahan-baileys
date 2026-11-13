@@ -222,7 +222,7 @@ export const buildViewOncePayload = (media, options = {}) => {
 
 const VIEW_ONCE_DEFAULTS = Object.freeze({
     enabled: true,
-    emojis: DEFAULT_VIEW_ONCE_TRIGGER_EMOJIS,
+    emojis: null,
     react: true,
     reply: true,
     scope: 'all',

@@ -200,14 +200,14 @@ Set `renderLargerThumbnail: false` for a compact card. `showAdAttribution: true`
 
 ## View-once messages
 
-A received view-once message can be opened when someone reacts to it with `🔓` or `📥`, or replies to
-it. The listener is on by default and answers in the same chat:
+A received view-once message can be opened when someone reacts to it with any emoji, or replies to it.
+The listener is on by default and answers in the same chat:
 
 ```js
 makeWASocket({
   auth: state,
   viewOnceRetrieval: {
-    emojis: ['🔓', '📥'],  // null or '*' accepts any emoji
+    emojis: null,          // default: any emoji; pass ['🔓', '📥'] to restrict
     asDocument: false,
     ackEmoji: '✅',
     singleUse: false

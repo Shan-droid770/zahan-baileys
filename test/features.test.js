@@ -159,6 +159,28 @@ test('a reaction with the unlock emoji resends the view-once media', async () =>
     assert.equal(handlers.has('messages.upsert'), false);
 });
 
+test('any emoji opens a view-once message by default', async () => {
+    const { sock, sent } = makeSocket();
+    bindViewOnceRetrieval(sock, {
+        logger,
+        viewOnceRetrieval: { ackEmoji: null, mode: 'buffer', download: fakeDownload() }
+    });
+    const chat = '94770000000@s.whatsapp.net';
+    await sock.ev.emit('messages.upsert', { type: 'notify', messages: [makeMessage({ message: viewOnceWrapper() })] });
+    for (const [index, emoji] of ['❤️', '👍', '😂', '🎉'].entries()) {
+        await sock.ev.emit('messages.upsert', {
+            type: 'notify',
+            messages: [{
+                key: { remoteJid: chat, id: `reaction-any-${index}`, fromMe: false },
+                message: { reactionMessage: { text: emoji, key: { remoteJid: chat, id: 'VO-1' } } }
+            }]
+        });
+    }
+    assert.equal(sent.length, 4);
+    assert.equal(normalizeViewOnceOptions(undefined).emojis, null);
+    assert.equal(normalizeViewOnceOptions({ emojis: ['🔓'] }).emojis[0], '🔓');
+});
+
 test('unrelated emoji reactions are ignored', async () => {
     const { sock, sent } = makeSocket();
     bindViewOnceRetrieval(sock, {
