@@ -76,6 +76,17 @@ await sock.updateProfilePicture(jid, { url: 'https://example.com/profile.jpg' })
 await sock.removeProfilePicture(jid)
 ```
 
+By default the picture is cropped to a square. `crop: false` keeps the whole frame and pads the
+empty sides with a blurred copy of the picture, so a vertical photo is not cut:
+
+```js
+await sock.updateProfilePicture(jid, { url: './portrait.jpg' }, { width: 720, height: 720 }, { crop: false })
+await sock.setProfilePicture({ url: './portrait.jpg' }, undefined, { crop: false })
+```
+
+Pass `{ fit: 'none' }` to send the file at its own aspect ratio, or `{ fit: 'cover' }` for the
+original square crop. Fitting needs `sharp`.
+
 `profilePictureUrl` takes `'image'` for the full-size picture or `'preview'` for the thumbnail. It throws when the account has no picture or their privacy settings hide it — catch it rather than letting it stop a message handler:
 
 ```js

@@ -3,7 +3,7 @@ import { TTLCache } from '../Utils/ttl-cache.js';
 import { Boom } from '@hapi/boom';
 import { randomBytes } from 'crypto';
 import { proto } from '../../WAProto/index.js';
-import { DEFAULT_CACHE_TTLS, DEFAULT_CONNECTION_CONFIG, KEY_BUNDLE_TYPE, MIN_PREKEY_COUNT, PLACEHOLDER_MAX_AGE_SECONDS, STATUS_EXPIRY_SECONDS } from '../Defaults/index.js';
+import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, DEFAULT_CONNECTION_CONFIG, KEY_BUNDLE_TYPE, MIN_PREKEY_COUNT, PLACEHOLDER_MAX_AGE_SECONDS, STATUS_EXPIRY_SECONDS } from '../Defaults/index.js';
 import { ReachoutTimelockEnforcementType, WAMessageStatus, WAMessageStubType } from '../Types/index.js';
 import { ACCOUNT_RESTRICTED_TEXT, aesDecryptCTR, aesEncryptGCM, cleanMessage, Curve, decodeMediaRetryNode, decodeMessageNode, decryptMessageNode, delay, derivePairingCodeKey, encodeBigEndian, encodeSignedDeviceIdentity, extractAddressingContext, extractE2ESessionFromRetryReceipt, getCallStatusFromNode, getHistoryMsg, getNextPreKeys, getStatusFromReceiptType, handleIdentityChange, hkdf, MISSING_KEYS_ERROR_TEXT, NACK_REASONS, NO_MESSAGE_FOUND_ERROR_TEXT, RETRYABLE_ACK_CODES, SERVER_ERROR_CODES, toNumber, unixTimestampSeconds, xmppPreKey, xmppSignedPreKey } from '../Utils/index.js';
 import { makeMutex } from '../Utils/make-mutex.js';
@@ -28,9 +28,9 @@ export const makeMessagesRecvSocket = (config) => {
     let retryQueueDepth = 0;
     const maxRetryQueueSize = config.maxRetryQueueSize ?? DEFAULT_CONNECTION_CONFIG.maxRetryQueueSize;
     const msgRetryCache = config.msgRetryCounterCache ||
-        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.MSG_RETRY });
+        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.MSG_RETRY, maxKeys: DEFAULT_CACHE_LIMITS.MSG_RETRY });
     const callOfferCache = config.callOfferCache ||
-        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.CALL_OFFER });
+        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.CALL_OFFER, maxKeys: DEFAULT_CACHE_LIMITS.CALL_OFFER });
 
     const identityAssertDebounce = new TTLCache({ stdTTL: 5 });
     let sendActiveReceipts = false;
@@ -1505,7 +1505,7 @@ export const makeMessagesRecvSocket = (config) => {
             await sendMessageAck(node).catch(ackErr => logger.error({ ackErr }, 'failed to ack call'));
         }
     };
-    const ackRetryCounts = new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.MSG_RETRY });
+    const ackRetryCounts = new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.MSG_RETRY, maxKeys: DEFAULT_CACHE_LIMITS.MSG_RETRY });
     const resendAfterRetryableNack = async (key, attempt) => {
 
         const remembered = outboundResendCache?.get(key.id);

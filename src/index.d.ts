@@ -14,6 +14,9 @@ export * from "./MessageBuilder/bot-signature.js";
 export * from "./Voip/index.js";
 import baseMakeWASocket from './Socket/index.js';
 import type { NewsletterStatusFetchOptions, NewsletterStatusList, NewsletterStatusSendOptions, NewsletterStatusSendResult, NewsletterStatusStanzaResult, NewsletterStatusUpdatesFetchOptions } from './Utils/newsletter-status.js';
+import type { StatusSendOptions } from './Utils/status-send.js';
+import type { ViewOnceRetrievalOptions } from './Utils/view-once.js';
+import type { getResourceUsage, trimMemory } from './Utils/resource-guard.js';
 type BaseWASocket = ReturnType<typeof baseMakeWASocket>;
 export type WASocket = BaseWASocket & {
     sendNewsletterStatus: (jid: string, content: any, options?: NewsletterStatusSendOptions) => Promise<NewsletterStatusSendResult>;
@@ -21,6 +24,18 @@ export type WASocket = BaseWASocket & {
     revokeNewsletterStatus: (jid: string, statusId: string, options?: Pick<NewsletterStatusSendOptions, 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;
     getNewsletterStatuses: (jid: string, options?: NewsletterStatusFetchOptions) => Promise<NewsletterStatusList>;
     getNewsletterStatusUpdates: (jid: string, options?: NewsletterStatusUpdatesFetchOptions) => Promise<NewsletterStatusList>;
+    sendStatus: (target: string | string[], content: any, options?: StatusSendOptions) => Promise<any>;
+    sendChannelStatus: (jid: string, content: any, options?: StatusSendOptions) => Promise<NewsletterStatusSendResult>;
+    reactChannelStatus: (jid: string, parentServerId: string | number, reaction: string, options?: Pick<NewsletterStatusSendOptions, 'messageId' | 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;
+    revokeChannelStatus: (jid: string, statusId: string, options?: Pick<NewsletterStatusSendOptions, 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;
+    getChannelStatuses: (jid: string, options?: NewsletterStatusFetchOptions) => Promise<NewsletterStatusList>;
+    getChannelStatusUpdates: (jid: string, options?: NewsletterStatusUpdatesFetchOptions) => Promise<NewsletterStatusList>;
+    openViewOnce: (message: any, options?: ViewOnceRetrievalOptions) => Promise<any>;
+    downloadViewOnce: (message: any, options?: ViewOnceRetrievalOptions) => Promise<any>;
+    retrieveViewOnce: (message: any, options?: ViewOnceRetrievalOptions) => Promise<any>;
+    stopViewOnceRetrieval: () => void;
+    getResourceUsage: typeof getResourceUsage;
+    trimMemory: typeof trimMemory;
 };
 export declare const makeWASocket: (config: Parameters<typeof baseMakeWASocket>[0]) => WASocket;
 export default makeWASocket;

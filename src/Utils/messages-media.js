@@ -3,7 +3,7 @@ import { Boom } from '@hapi/boom';
 import { spawn } from 'child_process';
 import * as Crypto from 'crypto';
 import { once } from 'events';
-import { createReadStream, createWriteStream, promises as fs } from 'fs';
+import { createReadStream, createWriteStream, mkdirSync, promises as fs } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Readable, Transform } from 'stream';
@@ -13,7 +13,11 @@ import { DEFAULT_ORIGIN, MEDIA_HKDF_KEY_MAPPING, MEDIA_PATH_MAP, NEWSLETTER_MEDI
 import { getBinaryNodeChild, getBinaryNodeChildBuffer, jidNormalizedUser } from '../WABinary/index.js';
 import { aesDecryptGCM, aesEncryptGCM, hkdf } from './crypto.js';
 import { generateMessageIDV2 } from './generics.js';
-const getTmpFilesDirectory = () => tmpdir();
+export const TEMP_MEDIA_DIRECTORY = process.env.ZAHAN_TMP_DIR || join(tmpdir(), 'zahan-baileys');
+export const getTmpFilesDirectory = () => {
+    mkdirSync(TEMP_MEDIA_DIRECTORY, { recursive: true });
+    return TEMP_MEDIA_DIRECTORY;
+};
 let imageProcessingLibrary;
 export const getImageProcessingLibrary = async () => {
     if (imageProcessingLibrary) {
@@ -47,7 +51,7 @@ export const getRawMediaUploadData = async (media, mediaType, logger) => {
     const { stream } = await getStream(media);
     logger?.debug('got stream for raw upload');
     const hasher = Crypto.createHash('sha256');
-    const filePath = join(tmpdir(), mediaType + generateMessageIDV2());
+    const filePath = join(getTmpFilesDirectory(), mediaType + generateMessageIDV2());
     const fileWriteStream = createWriteStream(filePath);
     let fileLength = 0;
     try {
@@ -178,46 +182,150 @@ export const extractImageThumb = async (bufferOrFilePath, width = 32) => {
     }
 };
 export const encodeBase64EncodedStringForUpload = (b64) => encodeURIComponent(b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/\=+$/, ''));
-export const generateProfilePicture = async (mediaUpload, dimensions) => {
-    let buffer;
-    const { width: w = 720, height: h = 720 } = dimensions || {};
+export const readMediaBuffer = async (mediaUpload) => {
     if (Buffer.isBuffer(mediaUpload)) {
-        buffer = mediaUpload;
+        return mediaUpload;
     }
-    else {
-
-        const { stream } = await getStream(mediaUpload);
-
-        buffer = await toBuffer(stream);
+    if (mediaUpload instanceof Uint8Array) {
+        return Buffer.from(mediaUpload);
     }
+    const { stream } = await getStream(mediaUpload);
+    return toBuffer(stream);
+};
+export const getImageDimensions = async (mediaUpload) => {
+    const buffer = await readMediaBuffer(mediaUpload);
+    const lib = await getImageProcessingLibrary();
+    if ('sharp' in lib && lib.sharp?.default) {
+        const meta = await lib.sharp.default(buffer).metadata();
+        if (meta?.width && meta?.height) {
+            return { width: meta.width, height: meta.height, format: meta.format };
+        }
+        return undefined;
+    }
+    if ('image' in lib && lib.image?.Transformer) {
+        const meta = await new lib.image.Transformer(buffer).metadata();
+        if (meta?.width && meta?.height) {
+            return { width: meta.width, height: meta.height, format: meta.type };
+        }
+        return undefined;
+    }
+    if ('jimp' in lib && lib.jimp?.Jimp) {
+        const jimp = await lib.jimp.Jimp.read(buffer);
+        return { width: jimp.width, height: jimp.height, format: jimp.mime };
+    }
+    return undefined;
+};
+const PROFILE_PICTURE_FITS = ['cover', 'contain', 'none'];
+const normalizeProfilePictureFit = ({ fit, crop, square }) => {
+    if (fit !== undefined) {
+        const value = String(fit).toLowerCase();
+        if (!PROFILE_PICTURE_FITS.includes(value)) {
+            throw new Boom(`Unsupported profile picture fit: ${fit}`, { statusCode: 400 });
+        }
+        return value;
+    }
+    if (crop === false || square === false) {
+        return 'contain';
+    }
+    return 'cover';
+};
+export const generateProfilePicture = async (mediaUpload, dimensions, options = {}) => {
+    const settings = { ...(dimensions || {}), ...(options || {}) };
+    const { width: w = 720, height: h = 720, quality = 85, background = 'blur' } = settings;
+    const fit = normalizeProfilePictureFit(settings);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+        throw new Boom('Profile picture width and height must be positive numbers', { statusCode: 400 });
+    }
+    if (!Number.isFinite(quality) || quality < 1 || quality > 100) {
+        throw new Boom('Profile picture quality must be between 1 and 100', { statusCode: 400 });
+    }
+    const buffer = await readMediaBuffer(mediaUpload);
     const lib = await getImageProcessingLibrary();
     let img;
+    let width = Math.round(w);
+    let height = Math.round(h);
     if ('sharp' in lib && lib.sharp?.default) {
-        img = lib.sharp
-            .default(buffer)
-            .resize(w, h)
-            .jpeg({
-            quality: 80
-        })
-            .toBuffer();
+        const sharp = lib.sharp.default;
+        if (fit === 'none') {
+            const meta = await sharp(buffer).metadata();
+            width = meta.width || width;
+            height = meta.height || height;
+            img = sharp(buffer).rotate().jpeg({ quality }).toBuffer();
+        }
+        else if (fit === 'contain') {
+            const fitted = await sharp(buffer).rotate().resize({
+                width,
+                height,
+                fit: 'inside'
+            }).jpeg({ quality }).toBuffer();
+            const fittedMeta = await sharp(fitted).metadata();
+            let canvas;
+            if (background === 'blur') {
+                canvas = await sharp(buffer)
+                    .rotate()
+                    .resize(width, height, { fit: 'cover' })
+                    .blur(24)
+                    .modulate({ brightness: 0.55 })
+                    .jpeg({ quality: Math.min(quality, 70) })
+                    .toBuffer();
+            }
+            else {
+                canvas = await sharp({
+                    create: { width, height, channels: 3, background }
+                }).jpeg({ quality: Math.min(quality, 70) }).toBuffer();
+            }
+            img = sharp(canvas)
+                .composite([{
+                input: fitted,
+                left: Math.max(0, Math.round((width - (fittedMeta.width || width)) / 2)),
+                top: Math.max(0, Math.round((height - (fittedMeta.height || height)) / 2))
+            }])
+                .jpeg({ quality })
+                .toBuffer();
+        }
+        else {
+            img = sharp(buffer).rotate().resize(width, height, { fit: 'cover' }).jpeg({ quality }).toBuffer();
+        }
     }
     else if ('image' in lib && lib.image?.Transformer) {
-        img = new lib.image
-            .Transformer(buffer)
-            .resize(w, h, 0)
-            .jpeg(80);
+        if (fit === 'none') {
+            const meta = await new lib.image.Transformer(buffer).metadata();
+            width = meta?.width || width;
+            height = meta?.height || height;
+            img = new lib.image.Transformer(buffer).jpeg(quality);
+        }
+        else if (fit === 'contain') {
+            throw new Boom('Preserving the full frame needs sharp. Install it with: npm i sharp', { statusCode: 400 });
+        }
+        else {
+            img = new lib.image.Transformer(buffer).resize(width, height, 0).jpeg(quality);
+        }
     }
     else if ('jimp' in lib && lib.jimp?.Jimp) {
-        const jimp = await lib.jimp.Jimp.read(buffer);
-        const min = Math.min(jimp.width, jimp.height);
-        const cropped = jimp.crop({ x: 0, y: 0, w: min, h: min });
-        img = cropped.resize({ w, h, mode: lib.jimp.ResizeStrategy.BILINEAR }).getBuffer('image/jpeg', { quality: 80 });
+        const jimpLib = lib.jimp;
+        const jimp = await jimpLib.Jimp.read(buffer);
+        if (fit === 'none') {
+            width = jimp.width;
+            height = jimp.height;
+            img = jimp.getBuffer('image/jpeg', { quality });
+        }
+        else if (fit === 'contain') {
+            throw new Boom('Preserving the full frame needs sharp. Install it with: npm i sharp', { statusCode: 400 });
+        }
+        else {
+            const min = Math.min(jimp.width, jimp.height);
+            const cropped = jimp.crop({ x: 0, y: 0, w: min, h: min });
+            img = cropped.resize({ w: width, h: height, mode: jimpLib.ResizeStrategy.BILINEAR }).getBuffer('image/jpeg', { quality });
+        }
     }
     else {
         throw new Boom('No image processing library available');
     }
     return {
-        img: await img
+        img: await img,
+        fit,
+        width,
+        height
     };
 };
 

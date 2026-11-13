@@ -198,6 +198,52 @@ await sock.sendMessage(jid, {
 
 Set `renderLargerThumbnail: false` for a compact card. `showAdAttribution: true` adds the "Sponsored" label.
 
+## View-once messages
+
+A received view-once message can be opened when someone reacts to it with any emoji, or replies to it.
+The listener is on by default and answers in the same chat:
+
+```js
+makeWASocket({
+  auth: state,
+  viewOnceRetrieval: {
+    emojis: null,          // default: any emoji; pass ['🔓', '📥'] to restrict
+    asDocument: false,
+    ackEmoji: '✅',
+    singleUse: false
+  }
+})
+```
+
+```js
+const media = await sock.downloadViewOnce({ key, message: msg.message })
+const streamed = await sock.openViewOnce({ key, message: msg.message })
+
+sock.ev.on('viewonce.retrieved', ({ chat, key, type }) => console.log(chat, key.id, type))
+```
+
+Set `viewOnceRetrieval: false` to disable it. See
+[View Once](https://github.com/Shan-droid770/zahan-baileys#-view-once) for every option.
+
+## Status without a quality drop
+
+`sendStatus` uploads the file untouched by default:
+
+```js
+await sock.sendStatus(statusJidList, { image: { url: './poster.jpg' }, caption: 'Original' })
+```
+
+```js
+await sock.sendStatus(statusJidList, { image: { url: './poster.jpg' } }, {
+  quality: 'high',
+  maxBytes: 1_000_000
+})
+```
+
+`'original'` passes the bytes through, `'high'` keeps the resolution and only re-encodes when the
+byte budget is exceeded, and `maxEdge` is the single option that can lower the resolution. A
+`@newsletter` jid publishes a channel status instead.
+
 ## Next
 
 For buttons, lists and carousels, continue to [MessageBuilder](./builder.html).

@@ -33,6 +33,15 @@ export const makeInMemoryStore = (config = {}) => {
     const state = { connection: 'close' };
     const labels = new ObjectRepository();
     const labelAssociations = new KeyedDB(labelAssociationKey, labelAssociationKey.key);
+    const maxMessagesPerChat = Math.max(0, Number(config.maxMessagesPerChat) || 0);
+    const trimMessageList = (list) => {
+        if (!maxMessagesPerChat || list.array.length <= maxMessagesPerChat) {
+            return;
+        }
+        for (const message of list.array.slice(0, list.array.length - maxMessagesPerChat)) {
+            list.remove(message);
+        }
+    };
     const assertMessageList = (jid) => {
         if (!messages[jid]) {
             messages[jid] = makeMessagesDictionary();
@@ -81,6 +90,7 @@ export const makeInMemoryStore = (config = {}) => {
                 const jid = msg.key.remoteJidAlt || msg.key.remoteJid;
                 const list = assertMessageList(jid);
                 list.upsert(msg, 'prepend');
+                trimMessageList(list);
             }
             logger.debug({ messages: newMessages.length }, 'synced messages');
         });
@@ -173,6 +183,7 @@ export const makeInMemoryStore = (config = {}) => {
                         const jid = jidNormalizedUser(msg.key.remoteJidAlt || msg.key.remoteJid);
                         const list = assertMessageList(jid);
                         list.upsert(msg, 'append');
+                        trimMessageList(list);
                         if (type === 'notify' && !chats.get(jid)) {
                             ev.emit('chats.upsert', [
                                 {

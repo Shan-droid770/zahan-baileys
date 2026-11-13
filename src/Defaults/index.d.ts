@@ -70,6 +70,8 @@ export namespace DEFAULT_CONNECTION_CONFIG {
     export let generateHighQualityLinkPreview: boolean;
     export let enableAutoSessionRecreation: boolean;
     export let enableRecentMessageCache: boolean;
+    export let viewOnceRetrieval: boolean | object;
+    export let resourceGuard: boolean | object;
     export let options: {};
     export namespace appStateMacVerification {
         let patch: boolean;
@@ -150,4 +152,11 @@ export {};
 export const MAX_OUTBOUND_RESEND_ENTRIES: number;
 export const MEMBER_LABEL_MAX_LENGTH: number;
 export const DEFAULT_CACHE_MAX_KEYS: number;
+export const DEFAULT_CACHE_LIMITS: {
+    SIGNAL_STORE: number;
+    MSG_RETRY: number;
+    CALL_OFFER: number;
+    USER_DEVICES: number;
+    OUTBOUND_RESEND: number;
+};
 export const PAIRING_RESPONSE_GRACE_MS: number;

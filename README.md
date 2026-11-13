@@ -158,6 +158,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [HTML Mini Apps](#-html-mini-apps)
 - [Album Messages](#-album-messages)
 - [Status](#-status)
+- [View Once](#-view-once)
 - [Newsletter / Channels](#-newsletter--channels)
 - [Username and Info](#-username-and-info)
 - [Group Management](#-group-management)
@@ -170,6 +171,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Business and Catalog](#-business-and-catalog)
 - [Calls](#-calls)
 - [Profile Photos](#-profile-photos)
+- [Low-Memory Mode (512 MB)](#-low-memory-mode-512-mb)
 - [Useful Exports](#-useful-exports)
 - [Updating the WhatsApp Web Version](#-updating-the-whatsapp-web-version)
 - [Scheduled Messages](#-scheduled-messages)
@@ -650,6 +652,7 @@ Important event groups:
 
 - **Connection and credentials:** `connection.update`, `creds.update`, `messaging-history.set`, `connection.newMessageCount`.
 - **Messages:** `messages.upsert`, `messages.update`, `messages.delete`, `messages.reaction`, `messages.media-update`, `message-receipt.update`.
+- **View once:** `viewonce.retrieved`, `viewonce.failed` when the built-in retrieval listener opens or cannot open a view-once message.
 - **Chats and contacts:** `chats.upsert`, `chats.update`, `chats.delete`, `contacts.upsert`, `contacts.update`, `presence.update`.
 - **Groups and communities:** `groups.upsert`, `groups.update`, `group-participants.update`, `group.join-request`, `communities.update`.
 - **Channels:** `newsletter.reaction`, `newsletter.view`, `newsletter-participants.update`, `newsletter-settings.update`.
@@ -2354,6 +2357,111 @@ Only a subset of status fields can actually be styled — the client ignores the
 
 ---
 
+### Full-Quality Status
+
+`sendStatus` publishes the file you hand it. With the default `quality: 'original'` the bytes are
+uploaded untouched — no resize, no re-encode, no JPEG quality drop — and the real width and height
+are written into the message so the client does not upscale it.
+
+```js
+await sock.sendStatus(['9477xxxxxxx@s.whatsapp.net', '9471xxxxxxx@s.whatsapp.net'], {
+  image: { url: './poster.jpg' },
+  caption: 'Original resolution'
+})
+```
+
+```js
+// keep the source resolution but stay under a byte budget
+await sock.sendStatus(statusJidList, { image: { url: './poster.jpg' } }, {
+  quality: 'high',
+  maxBytes: 1_000_000
+})
+```
+
+| `quality` | What happens |
+| --- | --- |
+| `'original'` (default) | bytes are passed through exactly as given |
+| `'high'` | keeps the source resolution, re-encodes only when over `maxBytes` |
+| `'medium'` | JPEG quality 80 at the source resolution, re-encodes only when needed |
+| `1..100` | JPEG quality to use when a re-encode is needed |
+
+If even the minimum quality cannot reach `maxBytes`, the source resolution is kept anyway — set `maxEdge`
+when bytes matter more than pixels.
+
+`maxEdge` is the only option that can reduce resolution, and it is off by default. WhatsApp still
+applies its own server-side cap to status media; this helper makes sure the library never shrinks it
+further. Pass a `@newsletter` jid instead of a recipient list and `sendStatus` publishes a channel
+status.
+
+---
+
+## 👁️ View Once
+
+View-once media is stored again when someone reacts to it with **any emoji** or replies to it.
+The feature is on by default (`viewOnceRetrieval: true`) and uses a bounded, 24-hour cache, so it
+does not grow with traffic.
+
+```js
+const socket = makeWASocket({
+  auth: state,
+  viewOnceRetrieval: {
+    emojis: null,          // default: any emoji; pass ['🔓', '📥'] to restrict
+    react: true,
+    reply: true,
+    scope: 'all',          // 'all' | 'dm' | 'group' | 'self'
+    asDocument: false,      // true keeps the original file, not a re-encoded image
+    ackEmoji: '✅',         // null disables the confirmation reaction
+    maxBytes: 64 * 1024 * 1024,
+    captionPrefix: '👁️',
+    singleUse: false,
+    onRetrieved: ({ key, type, mimetype }) => console.log('opened', key.id, type)
+  }
+})
+```
+
+```js
+// disable it entirely
+makeWASocket({ auth: state, viewOnceRetrieval: false })
+```
+
+Listen for the event instead of using the callback:
+
+```js
+socket.ev.on('viewonce.retrieved', ({ key, chat, type }) => console.log(chat, key.id, type))
+socket.ev.on('viewonce.failed', ({ key, error }) => console.log('could not open', key.id, error.message))
+```
+
+Open media yourself:
+
+```js
+const media = await socket.downloadViewOnce({ key, message: msg.message })
+// { type: 'image', buffer, mimetype, caption, ... }
+
+const streaming = await socket.openViewOnce({ key, message: msg.message })
+// { type: 'video', stream, mimetype, ... } — the stream is sent without loading the file in RAM
+```
+
+Helpers:
+
+```js
+import { isViewOnceMessage, unwrapViewOnce, getViewOnceMediaType, describeViewOnce } from 'zahan-baileys'
+
+isViewOnceMessage(msg.message)       // true
+unwrapViewOnce(msg.message)          // { imageMessage: { ... } }
+getViewOnceMediaType(msg.message)    // 'image' | 'video' | 'audio'
+describeViewOnce(msg.message)        // { type, mimetype, caption, fileLength, ... }
+```
+
+`DEFAULT_VIEW_ONCE_TRIGGER_EMOJIS` (`['🔓', '📥']`) is still exported for the old,
+unlock-emoji-only behaviour.
+
+Ephemeral, edited, and future-proof wrappers around a view-once message are unwrapped too. The
+retrieval listener answers to any emoji reaction by default; restrict it with
+`emojis: ['🔓', '📥']` (or `'*'`/`null` for any, which is the default). It never answers for status
+broadcasts, and it skips your own messages unless `allowFromMe: true`.
+
+---
+
 ## 📢 Newsletter / Channels
 
 > A channel message address is a `server_id`, not the `key.id` used in chats. Read it from an incoming channel message.
@@ -2561,6 +2669,19 @@ await sock.sendNewsletterStatus('123456789@newsletter', {
 await sock.sendNewsletterStatus('123456789@newsletter', {
   text: 'Thanks for 10 thousand followers'
 })
+```
+
+The channel-status helpers have channel-named aliases, and `sendStatus` routes any `@newsletter`
+target to the same code path:
+
+```js
+await sock.sendChannelStatus('123456789@newsletter', { image: { url: './poster.jpg' }, caption: 'New release' })
+await sock.sendStatus('123456789@newsletter', { text: 'Thanks for 10 thousand followers' })
+
+await sock.reactChannelStatus('123456789@newsletter', 175, '🔥')
+await sock.revokeChannelStatus('123456789@newsletter', statusId)
+const statuses = await sock.getChannelStatuses('123456789@newsletter', { count: 20 })
+const updates = await sock.getChannelStatusUpdates('123456789@newsletter', { count: 20 })
 ```
 
 ```js
@@ -3406,6 +3527,37 @@ await sock.updateProfilePicture(jid, {
 })
 ```
 
+### A Vertical Photo Without a Square Crop
+
+By default the photo is cropped to a square. Pass `crop: false` to keep the whole frame: the image is
+fitted by its longest side and the empty sides are filled with a blurred copy of the photo, so nothing
+is cut off.
+
+```js
+await sock.updateProfilePicture(jid, { url: './portrait.jpg' }, { width: 720, height: 720 }, {
+  crop: false,          // same as fit: 'contain'
+  background: 'blur',   // or any css color such as '#101010'
+  quality: 90
+})
+```
+
+```js
+// send the photo at its own aspect ratio and let the client decide
+await sock.updateProfilePicture(jid, { url: './portrait.jpg' }, undefined, { fit: 'none' })
+
+// your own profile photo
+await sock.setProfilePicture({ url: './portrait.jpg' }, undefined, { crop: false })
+```
+
+| `fit` | Result |
+| --- | --- |
+| `'cover'` (default) | square crop, the original behaviour |
+| `'contain'` | the entire frame is visible, padded with a blurred background |
+| `'none'` | the photo is sent at its own aspect ratio |
+
+`crop: false` and `square: false` are shorthand for `fit: 'contain'`. Generating the padded layout
+needs `sharp`; without it the library refuses instead of silently cropping your photo.
+
 ### Removing a Profile Photo
 
 ```js
@@ -4135,6 +4287,68 @@ const guard = async () => {
 ---
 
 ## 🐞 Troubleshooting
+## 🪶 Low-Memory Mode (512 MB)
+
+The socket ships with a resource guard and bounded caches so a bot can run on a 512 MB panel. Defaults
+already apply; the options below let you tighten them further.
+
+```js
+const socket = makeWASocket({
+  auth: state,
+  syncFullHistory: false,          // the default; history sync is the largest startup memory spike
+  resourceGuard: {
+    intervalMs: 5 * 60 * 1000,     // how often stale temp media is swept
+    staleTempFileMs: 60 * 60 * 1000,
+    heapUsageRatio: 0.85,          // trim caches when the heap passes this share of the limit
+    cleanTempFiles: true,
+    trimCaches: true
+  }
+})
+```
+
+```js
+await socket.getResourceUsage()
+// { memory: { rssMb, heapUsedMb, heapLimitMb, ... },
+//   storage: { tempDir, tempFiles, tempBytes, freeMb, ... },
+//   caches: { userDevicesCache, outboundResendCache, ... } }
+
+await socket.trimMemory()
+// { clearedCaches, removedTempFiles, freedTempBytes, garbageCollected, ... }
+
+await socket.getResourceUsage()
+```
+
+Helpers:
+
+```js
+import { getMemoryUsage, getStorageUsage, cleanupTempMedia, trimSocketCaches, getTempMediaDirectory } from 'zahan-baileys'
+
+getMemoryUsage()                       // process.memoryUsage() in MB plus the V8 heap limit
+await getStorageUsage()                // temp media size and free disk space
+await cleanupTempMedia({ maxAgeMs: 10 * 60 * 1000 })
+trimSocketCaches(socket)
+```
+
+What the library does for you:
+
+- Media temp files live in `<os tmpdir>/zahan-baileys` (override with `ZAHAN_TMP_DIR`), so the sweep can
+  never touch another process's files. Files are deleted after every upload and stale leftovers are
+  removed by the guard.
+- View-once media, media downloads, and uploads are streamed by default instead of being buffered.
+- Signal key, device, retry, and sent-message caches have explicit entry limits instead of the old
+  20 000-entry default.
+- `makeInMemoryStore({ maxMessagesPerChat: 100 })` caps the store so long-running bots do not grow
+  without bound.
+- The guard's timer is `unref`'d and cleans up when the socket closes.
+
+Recommended start command for a 512 MB container:
+
+```bash
+node --max-old-space-size=384 index.js
+```
+
+---
+
 
 ### `Cannot read properties of undefined (reading 'undefined')` when replying
 
