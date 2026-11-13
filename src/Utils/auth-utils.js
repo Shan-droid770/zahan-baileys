@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { Mutex } from 'async-mutex';
 import { randomBytes } from 'crypto';
 import PQueue from 'p-queue';
-import { DEFAULT_CACHE_TTLS } from '../Defaults/index.js';
+import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS } from '../Defaults/index.js';
 import { Curve, signedKeyPair } from './crypto.js';
 import { delay, generateRegistrationId } from './generics.js';
 import { PreKeyManager } from './pre-key-manager.js';
@@ -14,7 +14,7 @@ const txStorage = new AsyncLocalStorage();
 
 export function makeCacheableSignalKeyStore(store, logger, _cache) {
     const cache = _cache ||
-        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.SIGNAL_STORE });
+        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.SIGNAL_STORE, maxKeys: DEFAULT_CACHE_LIMITS.SIGNAL_STORE });
 
     const cacheMutex = new Mutex();
     function getUniqueId(type, id) {

@@ -2,7 +2,7 @@
 import { TTLCache } from '../Utils/ttl-cache.js';
 import { Boom } from '@hapi/boom';
 import { proto } from '../../WAProto/index.js';
-import { DEFAULT_CACHE_TTLS, HISTORY_SYNC_PAUSED_TIMEOUT_MS, PROCESSABLE_HISTORY_TYPES } from '../Defaults/index.js';
+import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, HISTORY_SYNC_PAUSED_TIMEOUT_MS, PROCESSABLE_HISTORY_TYPES } from '../Defaults/index.js';
 import { ALL_WA_PATCH_NAMES, SPAM_FLOWS } from '../Types/index.js';
 import { SyncState } from '../Types/State.js';
 import { chatModificationToAppPatch, decodePatches, decodeSyncdSnapshot, encodeSyncdPatch, ensureLTHashStateVersion, extractSyncdPatches, generateProfilePicture, getHistoryMsg, isAppStateSyncIrrecoverable, isMissingKeyError, MAX_SYNC_ATTEMPTS, newLTHashState, processSyncAction } from '../Utils/index.js';
@@ -96,7 +96,7 @@ export const makeChatsSocket = (config) => {
 
     const blockedCollections = new Set();
     const placeholderResendCache = config.placeholderResendCache ||
-        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.MSG_RETRY });
+        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.MSG_RETRY, maxKeys: DEFAULT_CACHE_LIMITS.MSG_RETRY });
 
     const getAppStateSyncKey = async (keyId) => {
         const { [keyId]: key } = await authState.keys.get('app-state-sync-key', [keyId]);
@@ -254,7 +254,7 @@ export const makeChatsSocket = (config) => {
         return userId;
     };
 
-    const updateProfilePicture = async (jid, content, dimensions) => {
+    const updateProfilePicture = async (jid, content, dimensions, options) => {
         let targetJid;
         if (!jid) {
             throw new Boom('Illegal no-jid profile update. Please specify either your ID or the ID of the chat you wish to update');
@@ -265,7 +265,7 @@ export const makeChatsSocket = (config) => {
         else {
             targetJid = undefined;
         }
-        const { img } = await generateProfilePicture(content, dimensions);
+        const { img } = await generateProfilePicture(content, dimensions, options);
         await query({
             tag: 'iq',
             attrs: {
@@ -282,6 +282,10 @@ export const makeChatsSocket = (config) => {
                 }
             ]
         });
+    };
+
+    const setProfilePicture = async (content, dimensions, options) => {
+        return updateProfilePicture(authState.creds.me.id, content, dimensions, options);
     };
 
     const removeProfilePicture = async (jid) => {
@@ -1436,6 +1440,7 @@ export const makeChatsSocket = (config) => {
         fetchStatus,
         fetchDisappearingDuration,
         updateProfilePicture,
+        setProfilePicture,
         removeProfilePicture,
         updateProfileStatus,
         getUsername,

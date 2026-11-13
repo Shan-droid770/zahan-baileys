@@ -54,6 +54,13 @@ export const DEFAULT_CACHE_TTLS = {
 export const MAX_OUTBOUND_RESEND_ENTRIES = 512;
 export const MEMBER_LABEL_MAX_LENGTH = 30;
 export const DEFAULT_CACHE_MAX_KEYS = 20000;
+export const DEFAULT_CACHE_LIMITS = {
+    SIGNAL_STORE: 5000,
+    MSG_RETRY: 2000,
+    CALL_OFFER: 1000,
+    USER_DEVICES: 2000,
+    OUTBOUND_RESEND: MAX_OUTBOUND_RESEND_ENTRIES
+};
 
 export const PAIRING_RESPONSE_GRACE_MS = 30000;
 export const DEFAULT_CONNECTION_CONFIG = {
@@ -78,7 +85,7 @@ export const DEFAULT_CONNECTION_CONFIG = {
     fireInitQueries: true,
     auth: undefined,
     markOnlineOnConnect: true,
-    syncFullHistory: true,
+    syncFullHistory: false,
     patchMessageBeforeSending: msg => msg,
     shouldSyncHistoryMessage: ({ syncType }) => {
         return syncType !== proto.HistorySync.HistorySyncType.FULL;
@@ -89,6 +96,8 @@ export const DEFAULT_CONNECTION_CONFIG = {
     generateHighQualityLinkPreview: true,
     enableAutoSessionRecreation: true,
     enableRecentMessageCache: true,
+    viewOnceRetrieval: true,
+    resourceGuard: true,
     options: {},
     appStateMacVerification: {
         patch: false,

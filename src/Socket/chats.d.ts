@@ -81,7 +81,8 @@ export function makeChatsSocket(config: any): {
     fetchBlocklist: () => Promise<any>;
     fetchStatus: (...jids: any[]) => Promise<any>;
     fetchDisappearingDuration: (...jids: any[]) => Promise<any>;
-    updateProfilePicture: (jid: any, content: any, dimensions: any) => Promise<void>;
+    updateProfilePicture: (jid: any, content: any, dimensions?: any, options?: any) => Promise<void>;
+    setProfilePicture: (content: any, dimensions?: any, options?: any) => Promise<void>;
     removeProfilePicture: (jid: any) => Promise<void>;
     updateProfileStatus: (status: any) => Promise<void>;
     getUsername: () => Promise<{

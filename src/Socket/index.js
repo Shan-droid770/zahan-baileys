@@ -3,6 +3,9 @@ import { DEFAULT_CONNECTION_CONFIG } from '../Defaults/index.js';
 import { prepareModernMessageContent } from '../Utils/modern-messages.js';
 import { makeNewsletterStatusFetcher, makeNewsletterStatusUpdatesFetcher, makeNewsletterStatusReactionSender, makeNewsletterStatusRevokeSender, makeNewsletterStatusSender } from '../Utils/newsletter-status.js';
 import { bindVoiceRecognition } from '../Utils/voice-recognition.js';
+import { bindViewOnceRetrieval, downloadViewOnceMedia, openViewOnceMedia } from '../Utils/view-once.js';
+import { bindResourceGuard } from '../Utils/resource-guard.js';
+import { makeChannelStatusSender, makeStatusSender } from '../Utils/status-send.js';
 import { makeCommunitiesSocket } from './communities.js';
 
 const makeWASocket = (config) => {
@@ -19,6 +22,17 @@ const makeWASocket = (config) => {
     sock.revokeNewsletterStatus = makeNewsletterStatusRevokeSender(sock);
     sock.getNewsletterStatuses = makeNewsletterStatusFetcher(sock);
     sock.getNewsletterStatusUpdates = makeNewsletterStatusUpdatesFetcher(sock);
+    sock.sendStatus = makeStatusSender(sock);
+    sock.sendChannelStatus = makeChannelStatusSender(sock);
+    sock.reactChannelStatus = sock.sendNewsletterStatusReaction;
+    sock.revokeChannelStatus = sock.revokeNewsletterStatus;
+    sock.getChannelStatuses = sock.getNewsletterStatuses;
+    sock.getChannelStatusUpdates = sock.getNewsletterStatusUpdates;
+    sock.openViewOnce = (message, options = {}) => openViewOnceMedia(message, { sock, logger: newConfig.logger, ...options });
+    sock.downloadViewOnce = (message, options = {}) => downloadViewOnceMedia(message, { sock, logger: newConfig.logger, ...options });
+    sock.retrieveViewOnce = sock.downloadViewOnce;
+    sock.stopViewOnceRetrieval = bindViewOnceRetrieval(sock, newConfig);
+    bindResourceGuard(sock, newConfig);
     if (newConfig.AnchorGuard) {
         import('@rexxhayanasi/elaina-anchorguard')
             .then(({ createAntiBugGuard }) => {

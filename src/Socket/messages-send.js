@@ -3,7 +3,7 @@ import { TTLCache } from '../Utils/ttl-cache.js';
 import { Boom } from '@hapi/boom';
 import { randomBytes } from 'crypto';
 import { proto } from '../../WAProto/index.js';
-import { BIZ_BOT_SUPPORT_PAYLOAD, DEFAULT_CACHE_TTLS, MAX_OUTBOUND_RESEND_ENTRIES, MEMBER_LABEL_MAX_LENGTH, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
+import { BIZ_BOT_SUPPORT_PAYLOAD, DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, MAX_OUTBOUND_RESEND_ENTRIES, MEMBER_LABEL_MAX_LENGTH, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
 import { aggregateMessageKeysNotFromMe, assertMediaContent, assertMeId, bindWaitForEvent, decryptMediaRetryData, DEF_MEDIA_HOST, delay, encodeNewsletterMessage, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateParticipantHashV2, generateWAMessage, generateWAMessageFromContent, getPollOptionHash, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, hasValidAlbumMedia, MessageRetryManager, normalizeMessageContent, parseAndInjectE2ESessions, prepareWAMessageMedia, shouldIncludeBizBinaryNode, unixTimestampSeconds } from '../Utils/index.js';
 import { AssociationType } from '../Types/index.js';
 import { makeStatusMentionMessage } from '../Utils/modern-messages.js';
@@ -50,7 +50,7 @@ export const makeMessagesSocket = (config) => {
 
     const inFlightTcTokenIssuance = new Set();
     const userDevicesCache = config.userDevicesCache ||
-        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.USER_DEVICES });
+        new TTLCache({ stdTTL: DEFAULT_CACHE_TTLS.USER_DEVICES, maxKeys: DEFAULT_CACHE_LIMITS.USER_DEVICES });
 
     const devicesMutex = makeMutex();
 
@@ -1286,21 +1286,27 @@ export const makeMessagesSocket = (config) => {
                     ...options,
                     messageId: generateMessageIDV2(userJid)
                 });
-                for (const id of jid) {
-                    if (isJidGroup(id)) {
-                        try {
-                            const groupData = (cachedGroupMetadata ? await cachedGroupMetadata(id) : null) || await groupMetadata(id);
-                            for (const participant of groupData.participants) {
-                                if (allUsers.has(participant.id))
-                                    continue;
-                                allUsers.add(participant.id);
-                            }
-                        }
-                        catch (error) {
-                            logger.error(`Error getting metadata group from ${id}: ${error}`);
-                        }
+                const groupTargets = [...new Set(jid.filter(isJidGroup))];
+                const directTargets = jid.filter(id => !isJidGroup(id));
+                const groupMetadataList = await Promise.all(groupTargets.map(async (id) => {
+                    try {
+                        const groupData = (cachedGroupMetadata ? await cachedGroupMetadata(id) : null) || await groupMetadata(id);
+                        return groupData;
                     }
-                    else if (!allUsers.has(id)) {
+                    catch (error) {
+                        logger.error(`Error getting metadata group from ${id}: ${error}`);
+                        return undefined;
+                    }
+                }));
+                for (const groupData of groupMetadataList) {
+                    for (const participant of groupData?.participants || []) {
+                        if (allUsers.has(participant.id))
+                            continue;
+                        allUsers.add(participant.id);
+                    }
+                }
+                for (const id of directTargets) {
+                    if (!allUsers.has(id)) {
                         allUsers.add(id);
                     }
                 }

@@ -2,11 +2,10 @@
 import { Boom } from '@hapi/boom';
 import { createHash } from 'crypto';
 import { createWriteStream, promises as fs } from 'fs';
-import { tmpdir } from 'os';
 import { join } from 'path';
 import { getBinaryNodeChild, getBinaryNodeChildren, getBinaryNodeChildString } from '../WABinary/index.js';
 import { generateMessageIDV2 } from './generics.js';
-import { getStream, getUrlFromDirectPath } from './messages-media.js';
+import { getStream, getTmpFilesDirectory, getUrlFromDirectPath } from './messages-media.js';
 export const parseCatalogNode = (node) => {
     const catalogNode = getBinaryNodeChild(node, 'product_catalog');
     const products = getBinaryNodeChildren(catalogNode, 'product').map(parseProductNode);
@@ -194,7 +193,7 @@ export const uploadingNecessaryImages = async (images, waUploadToServer, timeout
         }
         const { stream } = await getStream(img);
         const hasher = createHash('sha256');
-        const filePath = join(tmpdir(), 'img' + generateMessageIDV2());
+        const filePath = join(getTmpFilesDirectory(), 'img' + generateMessageIDV2());
         const encFileWriteStream = createWriteStream(filePath);
         for await (const block of stream) {
             hasher.update(block);

@@ -35,9 +35,30 @@ export function extractImageThumb(bufferOrFilePath: any, width?: number): Promis
     };
 }>;
 export function encodeBase64EncodedStringForUpload(b64: any): string;
-export function generateProfilePicture(mediaUpload: any, dimensions: any): Promise<{
+export function readMediaBuffer(mediaUpload: any): Promise<Buffer>;
+export function getImageDimensions(mediaUpload: any): Promise<{
+    width: number;
+    height: number;
+    format?: string;
+} | undefined>;
+export type ProfilePictureFit = 'cover' | 'contain' | 'none';
+export type ProfilePictureOptions = {
+    width?: number;
+    height?: number;
+    fit?: ProfilePictureFit;
+    crop?: boolean;
+    square?: boolean;
+    quality?: number;
+    background?: string;
+};
+export function generateProfilePicture(mediaUpload: any, dimensions?: ProfilePictureOptions, options?: ProfilePictureOptions): Promise<{
     img: any;
+    fit: ProfilePictureFit;
+    width: number;
+    height: number;
 }>;
+export const TEMP_MEDIA_DIRECTORY: string;
+export function getTmpFilesDirectory(): string;
 export function mediaMessageSHA256B64(message: any): any;
 export function toReadable(buffer: any): any;
 export function toBuffer(stream: any): Promise<any>;

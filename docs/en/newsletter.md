@@ -164,6 +164,28 @@ const preview = await sock.newsletterDirectoryCategories({ categories: ['NEWS'],
 
 Views are `RECOMMENDED`, `NEW`, `POPULAR`, `FEATURED` and `TRENDING`. Categories are `BUSINESS`, `ENTERTAINMENT`, `LIFESTYLE`, `NEWS`, `ORGANIZATIONS`, `PEOPLE`, `SPORTS` and `SPECIAL_EVENTS` through `SPECIAL_EVENTS_5`.
 
+## Channel status
+
+Channel status is the status shown on a channel profile. It needs admin or owner rights and the
+`channel_status_creation` capability:
+
+```js
+await sock.sendChannelStatus('123456789@newsletter', {
+  image: { url: './poster.jpg' },
+  caption: 'New release today'
+}, { quality: 'original' })
+
+const posted = await sock.sendChannelStatus('123456789@newsletter', { text: 'Thanks everyone' })
+await sock.reactChannelStatus('123456789@newsletter', posted.newsletterStatusServerId, '🔥')
+await sock.revokeChannelStatus('123456789@newsletter', posted.newsletterStatusServerId)
+
+const { statuses } = await sock.getChannelStatuses('123456789@newsletter', { count: 20 })
+```
+
+`sendChannelStatus`, `reactChannelStatus`, `revokeChannelStatus`, `getChannelStatuses` and
+`getChannelStatusUpdates` are aliases of the `sendNewsletterStatus` family. `sock.sendStatus` routes
+any `@newsletter` target here as well.
+
 ## How far this is verified
 
 Most of this page was reconstructed from the WhatsApp Web bundle rather than from an existing implementation.
