@@ -88,15 +88,17 @@ await sock.sendMessage(jid, {
 
 ### AI label (business bot)
 
-WhatsApp draws a small **AI** chip on messages sent by a bot. It is **on by default** for private chats:
+WhatsApp draws a small **AI** chip on messages sent by a bot. It is **off by default**:
 
 ```js
-await sock.sendMessage(jid, { text: 'Your order ships tomorrow.' })   // labelled
-await sock.sendMessage(jid, { text: 'typed by a human' }, { aiLabel: false })
-makeWASocket({ auth, aiLabel: false })                                // off for the socket
+makeWASocket({ auth, aiLabel: true })                                // on for the socket
+await sock.sendMessage(jid, { text: 'an AI answer', aiLabel: true }) // or one message
+await sock.sendAiMessage(jid, { text: 'an AI answer' })
 ```
 
 It adds a `<bot biz_bot="1"/>` node and the AI support payload to the stanza. Groups, status, and channels never carry it: asking there is a no-op, so a shared send helper that always sets `aiLabel: true` still delivers group commands. `supportsAiLabel(jid)` reports whether a chat can take the label, and `assertAiLabelSupported(jid)` throws the `400` when you want it. `relayMessage` and the builders accept the same `aiLabel` option, and the older `ai: true` spelling still works.
+
+Enable it only for a number that really is a WhatsApp Business AI/bot account — on a personal number WhatsApp can drop labelled private messages, while group messages keep working.
 
 ### Image
 

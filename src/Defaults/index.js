@@ -97,7 +97,7 @@ export const DEFAULT_CONNECTION_CONFIG = {
     enableAutoSessionRecreation: true,
     enableRecentMessageCache: true,
     viewOnceRetrieval: true,
-    aiLabel: true,
+    aiLabel: false,
     resourceGuard: true,
     options: {},
     appStateMacVerification: {

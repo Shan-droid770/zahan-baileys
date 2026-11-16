@@ -2114,7 +2114,7 @@ export const shouldApplyAiLabel = (jid, config, ...sources) => {
             return decision;
         }
     }
-    return config?.aiLabel !== false && supportsAiLabel(jid);
+    return config?.aiLabel === true && supportsAiLabel(jid);
 };
 
 export const applyAiLabelSupportPayload = (message) => {

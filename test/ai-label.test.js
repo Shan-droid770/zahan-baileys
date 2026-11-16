@@ -74,19 +74,21 @@ test('the modern content preparation keeps the AI label flag', () => {
     assert.equal(legacy.ai, true);
 });
 
-test('the AI label is on by default for private chats and can be opted out', () => {
+test('the AI label is opt-in and can be switched off per message', () => {
     assert.equal(aiLabelDecision({}), undefined);
     assert.equal(aiLabelDecision({ aiLabel: false }), false);
     assert.equal(aiLabelDecision({ ai: true }), true);
     assert.equal(aiLabelDecision(undefined), undefined);
 
-    assert.equal(shouldApplyAiLabel(pn, {}), true, 'default config labels private chats');
-    assert.equal(shouldApplyAiLabel(lid, {}), true);
-    assert.equal(shouldApplyAiLabel(pn, { aiLabel: false }), false, 'the socket can disable it');
-    assert.equal(shouldApplyAiLabel(pn, {}, { aiLabel: false }), false, 'a message can opt out');
+    assert.equal(shouldApplyAiLabel(pn, {}), false, 'off unless the socket asks for it');
+    assert.equal(shouldApplyAiLabel(lid, {}), false);
+    assert.equal(shouldApplyAiLabel(pn, { aiLabel: true }), true, 'the socket can enable it');
+    assert.equal(shouldApplyAiLabel(lid, { aiLabel: true }), true);
+    assert.equal(shouldApplyAiLabel(pn, { aiLabel: true }, { aiLabel: false }), false, 'a message can opt out');
     assert.equal(shouldApplyAiLabel(pn, { aiLabel: false }, { aiLabel: true }), true, 'an explicit message wins');
     assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}), false, 'groups never get it by default');
-    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}, { aiLabel: true }), true, 'an explicit request still throws later');
+    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', { aiLabel: true }), false, 'the socket switch never labels a group');
+    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}, { aiLabel: true }), true, 'the request is honoured, then skipped by the stanza');
     assert.equal(shouldApplyAiLabel('status@broadcast', {}), false);
     assert.equal(shouldApplyAiLabel('120363000000000000@newsletter', {}), false);
 });
