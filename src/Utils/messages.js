@@ -2094,11 +2094,27 @@ export const makeAiLabelNode = () => ({ tag: AI_LABEL_NODE_TAG, attrs: { ...AI_L
 
 export const supportsAiLabel = (jid) => isPnUser(jid) || isLidUser(jid);
 
-export const isAiLabelRequested = (source) => {
+export const aiLabelDecision = (source) => {
     if (!source || typeof source !== 'object') {
-        return false;
+        return undefined;
     }
-    return Boolean(source.aiLabel ?? source.ai);
+    const value = source.aiLabel ?? source.ai;
+    return value === undefined ? undefined : Boolean(value);
+};
+
+export const isAiLabelRequested = (source) => aiLabelDecision(source) === true;
+
+export const hasAiLabelNode = (nodes) => Array.isArray(nodes) &&
+    nodes.some(node => node?.tag === AI_LABEL_NODE_TAG && node?.attrs?.biz_bot === '1');
+
+export const shouldApplyAiLabel = (jid, config, ...sources) => {
+    for (const source of sources) {
+        const decision = aiLabelDecision(source);
+        if (decision !== undefined) {
+            return decision;
+        }
+    }
+    return config?.aiLabel !== false && supportsAiLabel(jid);
 };
 
 export const applyAiLabelSupportPayload = (message) => {
@@ -2116,6 +2132,9 @@ export const withAiLabel = (jid, message, additionalNodes = []) => {
         });
     }
     applyAiLabelSupportPayload(message);
+    if (hasAiLabelNode(additionalNodes)) {
+        return additionalNodes;
+    }
     return [...additionalNodes, makeAiLabelNode()];
 };
 

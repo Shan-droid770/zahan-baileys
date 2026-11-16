@@ -4,7 +4,7 @@ import { Boom } from '@hapi/boom';
 import { randomBytes } from 'crypto';
 import { proto } from '../../WAProto/index.js';
 import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, MAX_OUTBOUND_RESEND_ENTRIES, MEMBER_LABEL_MAX_LENGTH, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
-import { aggregateMessageKeysNotFromMe, assertMediaContent, assertMeId, bindWaitForEvent, decryptMediaRetryData, DEF_MEDIA_HOST, delay, encodeNewsletterMessage, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateParticipantHashV2, generateWAMessage, generateWAMessageFromContent, getPollOptionHash, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, hasValidAlbumMedia, isAiLabelRequested, MessageRetryManager, normalizeMessageContent, parseAndInjectE2ESessions, prepareWAMessageMedia, shouldIncludeBizBinaryNode, unixTimestampSeconds, withAiLabel } from '../Utils/index.js';
+import { aggregateMessageKeysNotFromMe, assertMediaContent, assertMeId, bindWaitForEvent, decryptMediaRetryData, DEF_MEDIA_HOST, delay, encodeNewsletterMessage, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateParticipantHashV2, generateWAMessage, generateWAMessageFromContent, getPollOptionHash, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, hasValidAlbumMedia, aiLabelDecision, MessageRetryManager, shouldApplyAiLabel, normalizeMessageContent, parseAndInjectE2ESessions, prepareWAMessageMedia, shouldIncludeBizBinaryNode, unixTimestampSeconds, withAiLabel } from '../Utils/index.js';
 import { AssociationType } from '../Types/index.js';
 import { makeStatusMentionMessage } from '../Utils/modern-messages.js';
 import { commitSenderKeyDelivery, pickSenderKeyRecipients, senderKeyResetSummary } from '../Utils/sender-key-memory.js';
@@ -464,7 +464,7 @@ export const makeMessagesSocket = (config) => {
         const isNewsletter = server === 'newsletter';
         const isGroupOrStatus = isGroup || isStatus;
         const finalJid = jid;
-        if (isAiLabelRequested({ aiLabel, ai })) {
+        if (shouldApplyAiLabel(jid, config, { aiLabel, ai })) {
             additionalNodes = withAiLabel(jid, message, additionalNodes ?? []);
         }
         msgId = msgId || generateMessageIDV2(meId);
@@ -1137,7 +1137,8 @@ export const makeMessagesSocket = (config) => {
             useCachedGroupMetadata: options.useCachedGroupMetadata,
             statusJidList: options.statusJidList,
             additionalAttributes: options.additionalAttributes,
-            additionalNodes: options.additionalNodes
+            additionalNodes: options.additionalNodes,
+            aiLabel: aiLabelDecision(options)
         };
         const emit = message => {
             if (config.emitOwnEvents) {
@@ -1173,7 +1174,8 @@ export const makeMessagesSocket = (config) => {
             useCachedGroupMetadata: options.useCachedGroupMetadata,
             statusJidList: options.statusJidList,
             additionalAttributes: options.additionalAttributes,
-            additionalNodes: options.additionalNodes
+            additionalNodes: options.additionalNodes,
+            aiLabel: aiLabelDecision(options)
         };
         const emit = message => {
             if (config.emitOwnEvents) {
@@ -1433,7 +1435,14 @@ export const makeMessagesSocket = (config) => {
                 const isPinMsg = 'pin' in content && !!content.pin;
                 const isKeepMsg = 'keep' in content && !!content.keep;
                 const isPollResultMsg = 'pollResult' in content && !!content.pollResult;
-                const isAiMsg = isAiLabelRequested(content) || isAiLabelRequested(options);
+                const explicitAiLabel = aiLabelDecision(content) ?? aiLabelDecision(options);
+                const isAiMsg = shouldApplyAiLabel(jid, config, content, options);
+                const isProtocolOp = isDeleteMsg || isKeepMsg || isEditMsg || isPinMsg || isPollResultMsg;
+                let aiLabelApplied = false;
+                if (explicitAiLabel !== undefined && content && typeof content === 'object') {
+                    delete content.ai;
+                    delete content.aiLabel;
+                }
                 const isNeedBizAttrs = 'secureMetaServiceLabel' in content && !!content.secureMetaServiceLabel;
                 const additionalAttributes = options.additionalAttributes || {};
                 const additionalNodes = options.additionalNodes || [];
@@ -1486,14 +1495,11 @@ export const makeMessagesSocket = (config) => {
                     });
                 }
 
-                else if (isAiMsg) {
+                if (isAiMsg && !isProtocolOp && !aiLabelApplied) {
                     for (const node of withAiLabel(jid, fullMsg.message, [])) {
                         additionalNodes.push(node);
                     }
-                    if (content && typeof content === 'object') {
-                        delete content.ai;
-                        delete content.aiLabel;
-                    }
+                    aiLabelApplied = true;
                 }
                 await relayMessage(jid, fullMsg.message, {
                     messageId: fullMsg.key.id,
@@ -1501,7 +1507,8 @@ export const makeMessagesSocket = (config) => {
                     addBizAttributes: isNeedBizAttrs,
                     statusJidList: options.statusJidList,
                     additionalAttributes,
-                    additionalNodes
+                    additionalNodes,
+                    aiLabel: aiLabelApplied
                 });
                 if (config.emitOwnEvents) {
                     process.nextTick(async () => {

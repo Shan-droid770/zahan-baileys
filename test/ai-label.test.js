@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_LABEL_NODE_ATTRS, AI_LABEL_NODE_TAG, applyAiLabelSupportPayload, isAiLabelRequested, makeAiLabelNode, supportsAiLabel, withAiLabel } from '../src/Utils/messages.js';
+import { AI_LABEL_NODE_ATTRS, AI_LABEL_NODE_TAG, aiLabelDecision, applyAiLabelSupportPayload, hasAiLabelNode, isAiLabelRequested, makeAiLabelNode, shouldApplyAiLabel, supportsAiLabel, withAiLabel } from '../src/Utils/messages.js';
 import { BIZ_BOT_SUPPORT_PAYLOAD } from '../src/Defaults/index.js';
 import { prepareModernMessageContent } from '../src/Utils/modern-messages.js';
 
@@ -68,4 +68,31 @@ test('the modern content preparation keeps the AI label flag', () => {
     assert.equal(prepared.text, 'hello');
     const legacy = prepareModernMessageContent({ text: 'hello', ai: true });
     assert.equal(legacy.ai, true);
+});
+
+test('the AI label is on by default for private chats and can be opted out', () => {
+    assert.equal(aiLabelDecision({}), undefined);
+    assert.equal(aiLabelDecision({ aiLabel: false }), false);
+    assert.equal(aiLabelDecision({ ai: true }), true);
+    assert.equal(aiLabelDecision(undefined), undefined);
+
+    assert.equal(shouldApplyAiLabel(pn, {}), true, 'default config labels private chats');
+    assert.equal(shouldApplyAiLabel(lid, {}), true);
+    assert.equal(shouldApplyAiLabel(pn, { aiLabel: false }), false, 'the socket can disable it');
+    assert.equal(shouldApplyAiLabel(pn, {}, { aiLabel: false }), false, 'a message can opt out');
+    assert.equal(shouldApplyAiLabel(pn, { aiLabel: false }, { aiLabel: true }), true, 'an explicit message wins');
+    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}), false, 'groups never get it by default');
+    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}, { aiLabel: true }), true, 'an explicit request still throws later');
+    assert.equal(shouldApplyAiLabel('status@broadcast', {}), false);
+    assert.equal(shouldApplyAiLabel('120363000000000000@newsletter', {}), false);
+});
+
+test('the label node is never duplicated', () => {
+    const message = { messageContextInfo: {} };
+    const once = withAiLabel(pn, message, [{ tag: 'bot', attrs: { biz_bot: '1' } }]);
+    assert.equal(once.length, 1);
+    assert.equal(hasAiLabelNode(once), true);
+    const twice = withAiLabel(pn, message, once);
+    assert.equal(twice.length, 1);
+    assert.equal(hasAiLabelNode([{ tag: 'bot', attrs: { biz_bot: '0' } }]), false);
 });

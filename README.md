@@ -792,19 +792,22 @@ View-once text uses the extension wrapper:
 
 ### AI label (business bot)
 
-WhatsApp shows a small **AI** chip on a message when the sender is a bot, so the other side knows no human typed it. Turn it on per message:
+WhatsApp shows a small **AI** chip on a message when the sender is a bot, so the other side knows no human typed it. **It is on by default**: every message you send in a private chat carries the label, and groups, status, and channels are skipped automatically.
 
 ```js
-await sock.sendMessage(jid, { text: 'Your order ships tomorrow.', aiLabel: true })
+const sock = makeWASocket({ auth })                       // labelled by default
+await sock.sendMessage(jid, { text: 'Your order ships tomorrow.' })
 
-// the same thing, spelled as a method
-await sock.sendAiMessage(jid, { text: 'Your order ships tomorrow.' })
-await sock.sendBizBotMessage(jid, { image, caption: 'Here is the photo you asked for' })
+const plain = makeWASocket({ auth, aiLabel: false })      // turn it off for the whole socket
+await sock.sendMessage(jid, { text: 'typed by a human' }, { aiLabel: false })   // or one message
+await sock.sendMessage(jid, { text: 'typed by a human', aiLabel: false })       // same, in the content
+await sock.sendAiMessage(jid, { text: 'Your order ships tomorrow.' })           // always labelled
+await sock.sendBizBotMessage(jid, { image, caption: 'Here is the photo' })
 ```
 
-`aiLabel: true` adds a `<bot biz_bot="1"/>` node to the outgoing stanza and writes the AI support payload into `messageContextInfo` — exactly what WhatsApp Web sends for a business AI answer. The older `ai: true` spelling is still accepted.
+`aiLabel` adds a `<bot biz_bot="1"/>` node to the outgoing stanza and writes the AI support payload into `messageContextInfo` — exactly what WhatsApp Web sends for a business AI answer. The older `ai: true` spelling is still accepted, and a message that already carries the node never gets a second one.
 
-- **Private chats only** (PN or LID). Groups, status, and channels raise a `400` because the label does not exist there.
+- **Private chats only** (PN or LID). With the default on, groups, status, and channels simply skip the label. Asking for it explicitly there throws a `400`, because the label does not exist in those chats.
 - Works through `relayMessage` and the builders as well:
 
 ```js
@@ -812,13 +815,13 @@ await sock.relayMessage(jid, message, { messageId, aiLabel: true })
 await new Button(sock).setBody('Pick one').addButton('Yes', 'yes').send(jid, { aiLabel: true })
 ```
 
+- **Only label content a bot actually wrote.** The chip is a statement to the recipient; send human-typed replies with `aiLabel: false`, or disable it on the socket and enable it per message instead.
 - The label is stanza metadata. It says the sender is a bot; it does not mark a photo or video as AI-generated. For that, set media provenance in the context info:
 
 ```js
 await sock.sendMessage(jid, {
   image: { url: './generated.png' },
   caption: 'Made with an image model',
-  aiLabel: true,
   contextInfo: {
     aiProvenance: {
       c2PaMetadata: { createdWithGenAi: true },

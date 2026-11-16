@@ -45,6 +45,7 @@ export namespace DEFAULT_CONNECTION_CONFIG {
     export let keepAliveIntervalMs: number;
     export let logger: any;
     export let emitOwnEvents: boolean;
+    export let aiLabel: boolean;
     export let defaultQueryTimeoutMs: number;
     export let customUploadHosts: never[];
     export let retryRequestDelayMs: number;
