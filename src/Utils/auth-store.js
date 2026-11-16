@@ -45,6 +45,13 @@ export const makeAuthStateFromStore = async (store, options = {}) => {
                 }
                 return data;
             },
+            list: async (type) => {
+                if (typeof secured.list !== 'function') {
+                    return undefined;
+                }
+                const ids = await secured.list(type);
+                return Array.isArray(ids) ? ids : undefined;
+            },
             set: async (data) => {
                 const writes = [];
                 const removals = [];

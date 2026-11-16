@@ -260,7 +260,7 @@ declare function makeWASocket(config: any): {
         messageId: string;
     }>;
     updateMediaMessage: (message: any) => Promise<any>;
-    sendMessage: (jid: any, content: any, options?: {}) => Promise<import("../index.js").proto.WebMessageInfo | undefined>;
+    sendMessage: (jid: string | string[], content: import("../Types/Content.js").AnyMessageContent | string, options?: import("../Types/Content.js").SendMessageOptions) => Promise<import("../index.js").proto.WebMessageInfo | undefined>;
     executeWMexQuery: (variables: any, queryId: any, dataPath: any) => Promise<any>;
     newsletterCreate: (name: any, description: any) => Promise<{
         id: any;

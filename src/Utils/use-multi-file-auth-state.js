@@ -1,6 +1,6 @@
 /* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 import { Mutex } from 'async-mutex';
-import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises';
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { proto } from '../../WAProto/index.js';
 import { initAuthCreds } from './auth-utils.js';
@@ -101,6 +101,18 @@ export const useMultiFileAuthState = async (folder, options = {}) => {
                         data[id] = value;
                     }));
                     return data;
+                },
+                list: async (type) => {
+                    try {
+                        const names = await readdir(folder);
+                        const prefix = `${type}-`;
+                        return names
+                            .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
+                            .map(name => name.slice(prefix.length, -'.json'.length));
+                    }
+                    catch {
+                        return [];
+                    }
                 },
                 set: async (data) => {
                     const tasks = [];

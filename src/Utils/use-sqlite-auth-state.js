@@ -100,6 +100,7 @@ export async function useSqliteAuthState(opts = {}) {
                     }
                     return data;
                 },
+                list: async (type) => stmts.keyListIds.all(type).map((row) => row.id),
                 set: async (data) => {
                     const operations = [];
                     for (const category in data) {

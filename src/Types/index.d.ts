@@ -5,6 +5,7 @@ export * from "./Chat.js";
 export * from "./Contact.js";
 export * from "./State.js";
 export * from "./Message.js";
+export * from "./Content.js";
 export * from "./Socket.js";
 export * from "./Events.js";
 export * from "./Product.js";

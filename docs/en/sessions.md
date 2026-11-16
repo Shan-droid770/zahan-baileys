@@ -66,6 +66,24 @@ await migrateMultiFileSession('./session', { vault: next, from: vault })
 
 For a database, pass `allowPlaintext: true` for one run and call `saveCreds()`; the next write seals the row. Keep the secret in the environment or a secret manager, never beside the session. Losing it means pairing again.
 
+## Moving a session to another host
+
+`exportSession` seals the credentials and every signal key into one string; `restoreSession` writes that string into a fresh auth state, so a new panel or server comes up without pairing again:
+
+```js
+import { useMultiFileAuthState, exportSession, restoreSession } from 'zahan-baileys'
+
+const { state } = await useMultiFileAuthState('session')
+const blob = await exportSession(state, { secret: process.env.SESSION_SECRET })
+await writeFile('session.zsess', blob)
+
+const fresh = await useMultiFileAuthState('session')
+const result = await restoreSession(fresh.state, blob, { secret: process.env.SESSION_SECRET })
+// { creds: true, types: [...], keyCount: 214, missing: [] }
+```
+
+Key types the backend cannot list end up in `missing`; `sessionBackupFingerprint(blob)` gives you a 16-character id for logs.
+
 ## Auditing the session
 
 ```js

@@ -236,6 +236,7 @@ export const encryptAuthStore = (store, vault, options = {}) => {
             }
             return store.apply(sealedWrites, removals);
         },
+        list: async (type) => (typeof store.list === 'function' ? store.list(type) : undefined),
         clear: async () => await store.clear?.(),
         close: async () => await store.close?.()
     };

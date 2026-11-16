@@ -110,6 +110,13 @@ export const useSingleFileAuthState = async (fileName, options = {}) => {
                     }
                     return data;
                 },
+                list: (type) => {
+                    const names = new Set([...cache.keys(), ...Object.keys(fileData)]);
+                    return [...names]
+                        .filter(keyName => keyName.startsWith(type) && keyName !== 'creds')
+                        .map(keyName => keyName.slice(type.length))
+                        .filter(id => id.length > 0);
+                },
                 set: (data) => {
                     for (const category in data) {
                         for (const id in data[category]) {

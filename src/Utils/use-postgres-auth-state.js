@@ -42,6 +42,10 @@ export async function usePostgresAuthState(opts = {}) {
             }
             return rows;
         },
+        list: async (type) => {
+            const result = await pool.query(`SELECT id FROM ${table} WHERE session = $1 AND type = $2`, [session, type]);
+            return result.rows.map((row) => row.id);
+        },
         write: async (type, id, value) => {
             await pool.query(`INSERT INTO ${table} (session, type, id, value) VALUES ($1, $2, $3, $4)
                 ON CONFLICT (session, type, id) DO UPDATE SET value = EXCLUDED.value`, [session, type, id, value]);

@@ -124,6 +124,10 @@ New here? This is the whole library in one view. Each row links to the section t
 | Play a queue of songs in a call | `playlist`, `enqueue`, `idle` | [Playing an Audio Queue](#playing-an-audio-queue) |
 | Send video or share the screen in a call | `video: true`, `screenShare: true` | [Video Calls](#video-calls), [Screen Sharing](#screen-sharing) |
 | Call a whole group at once | `voip.callGroup` | [Group Calls](#group-calls) |
+| Download media, even after it expired | `sock.downloadMedia` | [Downloading Media](#-downloading-media) |
+| Send without bursting into a ban | `sendRateLimit` | [Sending rate limit](#sending-rate-limit) |
+| Move a paired session to another host | `exportSession`, `restoreSession` | [Moving a session to another host](#moving-a-session-to-another-host) |
+| Check whether numbers exist, in bulk | `sock.checkNumbers` | [Checking numbers in bulk](#checking-numbers-in-bulk) |
 | Read or change profile photos | profile photo helpers | [Profile Photos](#-profile-photos) |
 | Schedule a message for later | scheduled messages | [Scheduled Messages](#-scheduled-messages) |
 | Keep up with WhatsApp Web changes | `npm run wa:update` | [Updating the WhatsApp Web Version](#-updating-the-whatsapp-web-version) |
@@ -146,11 +150,15 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Basic Connection](#-basic-connection)
 - [Session Storage](#-session-storage)
   - [Encrypted session](#encrypted-session-recommended-for-any-number-you-keep)
+  - [Moving a session to another host](#moving-a-session-to-another-host)
 - [Pairing Code](#-pairing-code)
 - [Receiving Messages](#-receiving-messages)
+- [Downloading Media](#-downloading-media)
+- [TypeScript](#typescript)
 - [Events](#-events)
 - [LID / PN / JID Addressing](#-lid--pn--jid-addressing)
 - [Sending Messages](#-sending-messages)
+  - [Sending rate limit](#sending-rate-limit)
 - [External Ad Reply](#-external-ad-reply)
 - [Rich Link Cards](#-rich-link-cards)
 - [Integrated MessageBuilder](#-integrated-messagebuilder)
@@ -168,6 +176,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Privacy Settings](#-privacy-settings)
 - [All Message Types](#-all-message-types)
 - [Presence and Read Receipts](#-presence-and-read-receipts)
+  - [Checking numbers in bulk](#checking-numbers-in-bulk)
 - [Chat State](#-chat-state)
 - [Labels](#-labels)
 - [Business and Catalog](#-business-and-catalog)
@@ -296,6 +305,24 @@ import makeWASocket, {
 
 > [!NOTE]
 > MessageBuilder is integrated. You do not need to install `baileys-mbuilder` separately.
+
+---
+
+### TypeScript
+
+The package ships hand-maintained declarations for the socket, the builders, and the message content. `AnyMessageContent`, `SendMessageOptions`, `ContactCheckResult`, `SendQueueStats`, and the session-backup options are real types now, so a typo such as `aiLabel` vs `ai_lable` is caught at build time:
+
+```ts
+import makeWASocket, { type AnyMessageContent, type SendMessageOptions } from 'zahan-baileys'
+
+const content: AnyMessageContent = { text: 'hello', aiLabel: true }
+const options: SendMessageOptions = { quoted: quotedMessage, skipRateLimit: true }
+
+await sock.sendMessage(jid, content, options)
+await sock.downloadMedia(msg, 'buffer', { startByte: 0 })
+```
+
+The declarations are tested with `npm run test:types` (`tsc --noEmit`), so keep that in CI next to `npm test`.
 
 ---
 
@@ -508,6 +535,25 @@ The first argument must be a connected NekoDB instance; the collection defaults 
 ```js
 const { state, saveCreds } = await useNekoDBAuth(db, 'my_sessions')
 ```
+
+### Moving a session to another host
+
+`exportSession` seals the credentials and every signal key into one string, and `restoreSession` writes it back into a fresh auth state, so a panel or a new server can come up without pairing again:
+
+```js
+import { useMultiFileAuthState, exportSession, restoreSession } from 'zahan-baileys'
+
+const { state } = await useMultiFileAuthState('session')
+const blob = await exportSession(state, { secret: process.env.SESSION_SECRET })
+await writeFile('session.zsess', blob)
+
+// on the other host
+const fresh = await useMultiFileAuthState('session')
+const result = await restoreSession(fresh.state, blob, { secret: process.env.SESSION_SECRET })
+// { creds: true, types: ['pre-key', 'session', ...], keyCount: 214, missing: [] }
+```
+
+The blob starts with `zsess1.` and is sealed with the same AES-256-GCM + scrypt envelope as the session vault, so a leaked backup is useless without the secret. Key types the backend cannot enumerate are listed in `missing` instead of being dropped silently. `sessionBackupFingerprint(blob)` returns a 16-character id you can log to tell two backups apart.
 
 ### Caching Signal Keys
 
@@ -781,6 +827,31 @@ await sock.sendMessage(jid, {
   }
 })
 ```
+
+### Sending rate limit
+
+Sending in bursts is what gets a fresh number banned fastest. Turn on the built-in per-chat queue and let it space the sends:
+
+```js
+const sock = makeWASocket({
+  auth,
+  sendRateLimit: {
+    perChatMs: 1500,      // one more message per chat every 1.5s after the burst
+    burst: 3,             // the first three go out immediately
+    jitter: 250,          // up to 250ms of extra randomness
+    maxQueue: 200,        // reject with 429 instead of growing forever
+    simulateTyping: true  // 'composing' presence + a short pause before each send
+  }
+})
+
+await sock.sendMessage(jid, { text: 'one' })
+await sock.sendMessage(jid, { text: 'two' }, { skipRateLimit: true })   // urgent, bypass the queue
+
+sock.sendQueueStats()      // { chats, queued, sent, delayed, rejected, perChatMs, ... }
+await sock.flushSendQueue()   // flush the queue on shutdown
+```
+
+The queue is per chat, so a busy group never delays a private reply. `sendRateLimit: true` uses the defaults, and the limiter stays off unless you ask for it.
 
 ### Mentions (people and groups)
 
@@ -2462,6 +2533,39 @@ status.
 
 ---
 
+## ⏬ Downloading Media
+
+`sock.downloadMedia` is the socket-level shorthand for `downloadMediaMessage`. It wires the media-retry hook for you, so a media URL WhatsApp has already expired (`404`/`410`) is requested again from the sender's device once and then downloaded a second time:
+
+```js
+const buffer = await sock.downloadMedia(msg)                 // Buffer
+const stream = await sock.downloadMedia(msg, 'stream')       // Readable, nothing kept in RAM
+const ranged = await sock.downloadMedia(msg, 'buffer', { startByte: 0, endByte: 65535 })
+
+await sock.downloadMedia(msg, 'buffer', {}, { recover: false })  // fail on the first error
+await sock.downloadMedia(msg, 'buffer', {}, { cache: false })    // skip the buffer cache
+```
+
+Recent buffers are kept in a bounded cache (16 entries / 32 MB / 10 minutes by default) so a thumbnail, a re-render, and a retry do not fetch the same file three times:
+
+```js
+makeWASocket({ auth, mediaDownloadCache: { ttlMs: 60_000, max: 8, maxBytes: 16 * 1024 * 1024 } })
+makeWASocket({ auth, mediaDownloadCache: false })   // disable it
+
+sock.mediaCacheStats()   // { entries, bytes, ttlMs, max, maxBytes, maxEntryBytes }
+sock.clearMediaCache()
+```
+
+Ask the sender for a fresh copy explicitly:
+
+```js
+const refreshed = await sock.requestMediaReupload(msg)   // same as sock.updateMediaMessage(msg)
+```
+
+> A bot only receives the re-upload answer from the **sender's** device. If your bot sent the file and WhatsApp has expired it, nothing can re-upload it from the bot side — keep your own copy (or upload it again) when the file matters.
+
+---
+
 ## 👁️ View Once
 
 View-once media is stored again when someone reacts to it with **any emoji** or replies to it.
@@ -3321,6 +3425,29 @@ for (const entry of results) {
   console.log(entry.jid, entry.exists)
 }
 ```
+
+#### Checking numbers in bulk
+
+`checkNumbers` checks a list in chunks, caches the answer for five minutes, and remembers missing numbers too, so a bot that validates a contact list does not ask the server the same question twice:
+
+```js
+const results = await sock.checkNumbers(['6281234567890', '+6289876543210', 'not a number'], {
+  chunkSize: 100,
+  concurrency: 3,
+  delayMs: 250   // pause between chunks
+})
+// [{ jid: '6281234567890@s.whatsapp.net', exists: true, cached: false }, ...]
+
+sock.contactCheckStats()   // { hits, misses, keys, ttlMs, max }
+sock.clearContactCache()
+```
+
+```js
+makeWASocket({ auth, contactCheckCache: { ttlMs: 15 * 60 * 1000, max: 10_000 } })
+makeWASocket({ auth, contactCheckCache: false })   // always ask the server
+```
+
+`onWhatsApp` uses the same cache, so consecutive calls for the same numbers are free.
 
 Looking up a JID by username:
 
