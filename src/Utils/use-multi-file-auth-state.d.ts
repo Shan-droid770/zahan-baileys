@@ -1,5 +1,15 @@
 /* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
-export function useMultiFileAuthState(folder: any): Promise<{
+import type { AuthVault, AuthVaultKdfOptions, AuthVaultSecret } from './auth-vault.js';
+export interface MultiFileAuthStateOptions {
+    vault?: AuthVault;
+    secret?: AuthVaultSecret;
+    passphrase?: string;
+    allowPlaintext?: boolean;
+    requireVault?: boolean;
+    kdf?: AuthVaultKdfOptions;
+    salt?: string | Buffer | Uint8Array;
+}
+export function useMultiFileAuthState(folder: string, options?: MultiFileAuthStateOptions): Promise<{
     state: {
         creds: any;
         keys: {
@@ -8,5 +18,6 @@ export function useMultiFileAuthState(folder: any): Promise<{
         };
     };
     saveCreds: () => Promise<any>;
+    vault: AuthVault | null;
 }>;
 export function countAuthFileLocks(): number;

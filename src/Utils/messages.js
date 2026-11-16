@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'crypto';
 import { zip } from 'fflate';
 import { promises as fs } from 'fs';
 import { proto } from '../../WAProto/index.js';
-import { CALL_AUDIO_PREFIX, CALL_VIDEO_PREFIX, DONATE_URL, LIBRARY_NAME, MEDIA_KEYS, URL_REGEX, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
+import { BIZ_BOT_SUPPORT_PAYLOAD, CALL_AUDIO_PREFIX, CALL_VIDEO_PREFIX, DONATE_URL, LIBRARY_NAME, MEDIA_KEYS, URL_REGEX, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
 import { ButtonHeaderType, ButtonType, CarouselCardType, ListType, WAMessageStatus, WAProto } from '../Types/index.js';
 import { isLidUser, isPnUser, isJidGroup, isJidNewsletter, isJidStatusBroadcast, jidNormalizedUser } from '../WABinary/index.js';
 import { sha256 } from './crypto.js';
@@ -2027,20 +2027,30 @@ export const aggregateMessageKeysNotFromMe = (keys) => {
     }
     return Object.values(keyMap);
 };
-const REUPLOAD_REQUIRED_STATUS = [410, 404];
+export const REUPLOAD_REQUIRED_STATUS = Object.freeze([410, 404]);
+
+export const mediaErrorStatus = (error) => {
+    const status = error?.status ?? error?.statusCode ?? error?.output?.statusCode;
+    return typeof status === 'number' ? status : undefined;
+};
+
+export const isReuploadRequiredError = (error) => {
+    const status = mediaErrorStatus(error);
+    return status !== undefined && REUPLOAD_REQUIRED_STATUS.includes(status);
+};
 
 export const downloadMediaMessage = async (message, type, options, ctx) => {
     const result = await downloadMsg().catch(async (error) => {
-        if (ctx &&
-            typeof error?.status === 'number' &&
-            REUPLOAD_REQUIRED_STATUS.includes(error.status)) {
-            ctx.logger.info({ key: message.key }, 'sending reupload media request...');
-
-            message = await ctx.reuploadRequest(message);
-            const result = await downloadMsg();
-            return result;
+        if (!isReuploadRequiredError(error) || typeof ctx?.reuploadRequest !== 'function') {
+            throw error;
         }
-        throw error;
+        ctx.logger?.info?.({ key: message.key, status: mediaErrorStatus(error) }, 'media expired upstream, asking the sender to re-upload it');
+        const updated = await ctx.reuploadRequest(message);
+        if (!updated?.message) {
+            throw error;
+        }
+        message = updated;
+        return await downloadMsg();
     });
     return result;
     async function downloadMsg() {
@@ -2075,6 +2085,57 @@ export const downloadMediaMessage = async (message, type, options, ctx) => {
         }
         return stream;
     }
+};
+
+export const AI_LABEL_NODE_TAG = 'bot';
+export const AI_LABEL_NODE_ATTRS = Object.freeze({ biz_bot: '1' });
+
+export const makeAiLabelNode = () => ({ tag: AI_LABEL_NODE_TAG, attrs: { ...AI_LABEL_NODE_ATTRS }, content: undefined });
+
+export const supportsAiLabel = (jid) => isPnUser(jid) || isLidUser(jid);
+
+export const aiLabelDecision = (source) => {
+    if (!source || typeof source !== 'object') {
+        return undefined;
+    }
+    const value = source.aiLabel ?? source.ai;
+    return value === undefined ? undefined : Boolean(value);
+};
+
+export const isAiLabelRequested = (source) => aiLabelDecision(source) === true;
+
+export const hasAiLabelNode = (nodes) => Array.isArray(nodes) &&
+    nodes.some(node => node?.tag === AI_LABEL_NODE_TAG && node?.attrs?.biz_bot === '1');
+
+export const shouldApplyAiLabel = (jid, config, ...sources) => {
+    for (const source of sources) {
+        const decision = aiLabelDecision(source);
+        if (decision !== undefined) {
+            return decision;
+        }
+    }
+    return config?.aiLabel !== false && supportsAiLabel(jid);
+};
+
+export const applyAiLabelSupportPayload = (message) => {
+    if (message?.messageContextInfo) {
+        message.messageContextInfo.supportPayload = BIZ_BOT_SUPPORT_PAYLOAD;
+    }
+    return message;
+};
+
+export const withAiLabel = (jid, message, additionalNodes = []) => {
+    if (!supportsAiLabel(jid)) {
+        throw new Boom('the AI label is only allowed in private chats, not in groups, status, or channels', {
+            statusCode: 400,
+            data: { jid }
+        });
+    }
+    applyAiLabelSupportPayload(message);
+    if (hasAiLabelNode(additionalNodes)) {
+        return additionalNodes;
+    }
+    return [...additionalNodes, makeAiLabelNode()];
 };
 
 export const assertMediaContent = (content) => {

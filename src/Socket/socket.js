@@ -7,7 +7,7 @@ import { proto } from '../../WAProto/index.js';
 import { DEF_CALLBACK_PREFIX, DEF_TAG_PREFIX, INITIAL_PREKEY_COUNT, MIN_PREKEY_COUNT, NOISE_WA_HEADER, PROCESSABLE_HISTORY_TYPES, TimeMs, UPLOAD_TIMEOUT, PAIRING_RESPONSE_GRACE_MS } from '../Defaults/index.js';
 import { NewChatMessageCappingStatusType, QueryIds, ReachoutTimelockEnforcementType } from '../Types/index.js';
 import { DisconnectReason, XWAPaths } from '../Types/index.js';
-import { addTransactionCapability, aesEncryptCTR, bindWaitForConnectionUpdate, buildPairingQRData, bytesToCrockford, configureSuccessfulPairing, Curve, derivePairingCodeKey, generateLoginNode, generateMdTagPrefix, generateRegistrationNode, getCodeFromWSError, getCompanionPlatformId, getErrorCodeFromStreamError, getNextPreKeysNode, makeEventBuffer, makeNoiseHandler, promiseTimeout, signedKeyPair, xmppSignedPreKey } from '../Utils/index.js';
+import { addTransactionCapability, aesEncryptCTR, bindWaitForConnectionUpdate, buildPairingQRData, bytesToCrockford, configureSuccessfulPairing, CONTACT_CHECK_DEFAULTS, Curve, derivePairingCodeKey, generateLoginNode, generateMdTagPrefix, generateRegistrationNode, getCodeFromWSError, getCompanionPlatformId, getErrorCodeFromStreamError, getNextPreKeysNode, makeContactCheckCache, makeEventBuffer, makeNoiseHandler, normalizePhoneDigits, promiseTimeout, resolveContactChecks, signedKeyPair, xmppSignedPreKey } from '../Utils/index.js';
 import { assertNodeErrorFree, binaryNodeToString, encodeBinaryNode, getAllBinaryNodeChildren, getBinaryNodeChild, getBinaryNodeChildren, isLidUser, jidDecode, jidEncode, jidNormalizedUser, S_WHATSAPP_NET } from '../WABinary/index.js';
 import { BinaryInfo } from '../WAM/BinaryInfo.js';
 import { USyncQuery, USyncUser } from '../WAUSync/index.js';
@@ -210,30 +210,45 @@ export const makeSocket = (config) => {
         const result = await query(iq);
         return usyncQuery.parseUSyncQueryResult(result);
     };
-    const onWhatsApp = async (...phoneNumber) => {
-        let usyncQuery = new USyncQuery();
-        let contactEnabled = false;
-        for (const jid of phoneNumber) {
-            if (isLidUser(jid)) {
-                logger?.warn('LIDs are not supported with onWhatsApp');
-                continue;
-            }
-            else {
-                if (!contactEnabled) {
-                    contactEnabled = true;
-                    usyncQuery = usyncQuery.withContactProtocol();
-                }
-                const phone = `+${jid.replace('+', '').split('@')[0]?.split(':')[0]}`;
-                usyncQuery.withUser(new USyncUser().withPhone(phone));
+    const contactChecks = makeContactCheckCache(config.contactCheckCache);
+    const queryContacts = async (jids) => {
+        const usyncQuery = new USyncQuery().withContactProtocol();
+        for (const jid of jids) {
+            const digits = normalizePhoneDigits(jid);
+            if (digits) {
+                usyncQuery.withUser(new USyncUser().withPhone(`+${digits}`));
             }
         }
         if (usyncQuery.users.length === 0) {
             return [];
         }
         const results = await executeUSyncQuery(usyncQuery);
-        if (results) {
-            return results.list.filter(a => !!a.contact).map(({ contact, id }) => ({ jid: id, exists: contact }));
+        return (results?.list ?? []).map(({ contact, id }) => ({ jid: jidNormalizedUser(id), exists: !!contact }));
+    };
+    const onWhatsApp = async (...phoneNumber) => {
+        for (const jid of phoneNumber) {
+            if (isLidUser(jid)) {
+                logger?.warn('LIDs are not supported with onWhatsApp');
+            }
         }
+        return resolveContactChecks({
+            inputs: phoneNumber.filter(jid => !isLidUser(jid)),
+            cache: contactChecks,
+            query: queryContacts,
+            delayMs: 0,
+            concurrency: 1
+        });
+    };
+    const checkNumbers = async (numbers, options = {}) => {
+        const list = Array.isArray(numbers) ? numbers : [numbers];
+        return resolveContactChecks({
+            inputs: list.filter(jid => !isLidUser(jid)),
+            cache: options.cache === false ? null : contactChecks,
+            query: queryContacts,
+            chunkSize: options.chunkSize ?? CONTACT_CHECK_DEFAULTS.chunkSize,
+            concurrency: options.concurrency ?? CONTACT_CHECK_DEFAULTS.concurrency,
+            delayMs: options.delayMs ?? CONTACT_CHECK_DEFAULTS.delayMs
+        });
     };
     const onWhatsAppUsername = async (...usernames) => {
         let usyncQuery = new USyncQuery().withContactProtocol();
@@ -1074,6 +1089,9 @@ export const makeSocket = (config) => {
         sendWAMBuffer,
         executeUSyncQuery,
         onWhatsApp,
+        checkNumbers,
+        clearContactCache: () => contactChecks?.clear(),
+        contactCheckStats: () => contactChecks?.stats() ?? null,
         onWhatsAppUsername,
         getUsernames,
         fetchAccountReachoutTimelock,

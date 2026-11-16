@@ -86,6 +86,18 @@ await sock.sendMessage(jid, {
 })
 ```
 
+### AI label (business bot)
+
+WhatsApp draws a small **AI** chip on messages sent by a bot. It is **on by default** for private chats:
+
+```js
+await sock.sendMessage(jid, { text: 'Your order ships tomorrow.' })   // labelled
+await sock.sendMessage(jid, { text: 'typed by a human' }, { aiLabel: false })
+makeWASocket({ auth, aiLabel: false })                                // off for the socket
+```
+
+It adds a `<bot biz_bot="1"/>` node and the AI support payload to the stanza. Groups, status, and channels skip it by default, and asking for it explicitly there returns a `400`. `relayMessage` and the builders accept the same `aiLabel` option, and the older `ai: true` spelling still works.
+
 ### Image
 
 ```js
@@ -198,6 +210,29 @@ await sock.sendMessage(jid, {
 
 Set `renderLargerThumbnail: false` for a compact card. `showAdAttribution: true` adds the "Sponsored" label.
 
+## Downloading media
+
+`downloadMediaMessage` is available as `sock.downloadMedia`, with the media-retry hook already wired, so an expired URL (`404`/`410`) is requested again once before failing:
+
+```js
+const buffer = await sock.downloadMedia(msg)
+const stream = await sock.downloadMedia(msg, 'stream')
+const head = await sock.downloadMedia(msg, 'buffer', { startByte: 0, endByte: 65535 })
+```
+
+Buffers are cached for ten minutes (16 entries, 32 MB) unless you pass `mediaDownloadCache: false` to `makeWASocket`. `sock.requestMediaReupload(msg)` asks the sender for a fresh copy explicitly.
+
+## Sending rate limit
+
+```js
+makeWASocket({
+  auth,
+  sendRateLimit: { perChatMs: 1500, burst: 3, jitter: 250, simulateTyping: true }
+})
+```
+
+Sends are queued per chat, so a busy group never delays a private reply. `skipRateLimit: true` bypasses the queue for an urgent message, `sock.sendQueueStats()` shows the counters, and `sock.flushSendQueue()` drains it on shutdown.
+
 ## View-once messages
 
 A received view-once message can be opened when someone reacts to it with any emoji, or replies to it.
@@ -210,7 +245,9 @@ makeWASocket({
     emojis: null,          // default: any emoji; pass ['🔓', '📥'] to restrict
     asDocument: false,
     ackEmoji: '✅',
-    singleUse: false
+    singleUse: false,
+    recover: true,        // re-request media WhatsApp already expired (404/410)
+    downloadOptions: {}   // forwarded to the media downloader
   }
 })
 ```
@@ -224,6 +261,19 @@ sock.ev.on('viewonce.retrieved', ({ chat, key, type }) => console.log(chat, key.
 
 Set `viewOnceRetrieval: false` to disable it. See
 [View Once](https://github.com/Shan-droid770/zahan-baileys#-view-once) for every option.
+
+## Checking numbers in bulk
+
+```js
+const results = await sock.checkNumbers(['6281234567890', '6289876543210'], {
+  chunkSize: 100,
+  concurrency: 3,
+  delayMs: 250
+})
+// [{ jid, exists, cached }, ...]
+```
+
+Answers are cached for five minutes, including numbers that do not exist. `contactCheckCache: { ttlMs, max }` changes the window and `contactCheckCache: false` disables it; `sock.clearContactCache()` empties it.
 
 ## Status without a quality drop
 

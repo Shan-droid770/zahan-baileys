@@ -49,6 +49,7 @@ export type ViewOnceRetrievalOptions = {
     cacheSize?: number;
     ttlMs?: number;
     singleUse?: boolean;
+    recover?: boolean;
     ackEmoji?: string | null;
     captionPrefix?: string;
     captionSuffix?: string;

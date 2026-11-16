@@ -1149,7 +1149,7 @@ export const makeMessagesRecvSocket = (config) => {
                 continue;
             if (msg && (await willSendMessageAgain(ids[i], participant))) {
                 await updateSendMessageAgainCount(ids[i], participant);
-                const msgRelayOpts = { messageId: ids[i] };
+                const msgRelayOpts = { messageId: ids[i], aiLabel: false };
                 if (sendToAll) {
                     msgRelayOpts.useUserDevicesCache = false;
                 }
@@ -1515,7 +1515,7 @@ export const makeMessagesRecvSocket = (config) => {
             return false;
         }
         await delay(ackRetryDelayMs * attempt);
-        await relayMessage(remembered?.jid || key.remoteJid, message, { messageId: key.id, useUserDevicesCache: false });
+        await relayMessage(remembered?.jid || key.remoteJid, message, { messageId: key.id, useUserDevicesCache: false, aiLabel: false });
         return true;
     };
     const handleBadAck = async ({ attrs }) => {

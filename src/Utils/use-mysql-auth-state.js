@@ -42,6 +42,10 @@ export async function useMySQLAuthState(opts = {}) {
             }
             return found;
         },
+        list: async (type) => {
+            const [rows] = await pool.query(`SELECT id FROM ${table} WHERE session = ? AND type = ?`, [session, type]);
+            return rows.map((row) => row.id);
+        },
         write: async (type, id, value) => {
             await pool.query(`INSERT INTO ${table} (session, type, id, value) VALUES (?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE value = VALUES(value)`, [session, type, id, value]);
@@ -76,5 +80,5 @@ export async function useMySQLAuthState(opts = {}) {
             }
         }
     };
-    return makeAuthStateFromStore(store);
+    return makeAuthStateFromStore(store, opts);
 }

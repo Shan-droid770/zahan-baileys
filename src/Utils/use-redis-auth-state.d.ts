@@ -5,6 +5,13 @@ export interface RedisAuthStateOptions {
     config?: any;
     prefix?: string;
     session?: string;
+    vault?: import('./auth-vault.js').AuthVault;
+    secret?: import('./auth-vault.js').AuthVaultSecret;
+    passphrase?: string;
+    allowPlaintext?: boolean;
+    requireVault?: boolean;
+    kdf?: import('./auth-vault.js').AuthVaultKdfOptions;
+    salt?: string | Buffer | Uint8Array;
 }
 export function useRedisAuthState(opts?: RedisAuthStateOptions): Promise<{
     state: {
@@ -17,4 +24,5 @@ export function useRedisAuthState(opts?: RedisAuthStateOptions): Promise<{
     saveCreds: () => Promise<void>;
     clearAuth: () => Promise<void>;
     close: () => Promise<void>;
+    vault: import('./auth-vault.js').AuthVault | null;
 }>;

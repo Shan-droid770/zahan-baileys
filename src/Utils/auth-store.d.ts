@@ -16,7 +16,16 @@ export interface AuthStore {
     clear: () => Promise<void>;
     close?: () => Promise<void>;
 }
-export function makeAuthStateFromStore(store: AuthStore): Promise<{
+export interface MakeAuthStateOptions {
+    vault?: import('./auth-vault.js').AuthVault;
+    secret?: import('./auth-vault.js').AuthVaultSecret;
+    passphrase?: string;
+    allowPlaintext?: boolean;
+    requireVault?: boolean;
+    kdf?: import('./auth-vault.js').AuthVaultKdfOptions;
+    salt?: string | Buffer | Uint8Array;
+}
+export function makeAuthStateFromStore(store: AuthStore, options?: MakeAuthStateOptions): Promise<{
     state: {
         creds: any;
         keys: {
@@ -27,4 +36,5 @@ export function makeAuthStateFromStore(store: AuthStore): Promise<{
     saveCreds: () => Promise<void>;
     clearAuth: () => Promise<void>;
     close: () => Promise<void>;
+    vault: import('./auth-vault.js').AuthVault | null;
 }>;

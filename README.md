@@ -124,9 +124,14 @@ New here? This is the whole library in one view. Each row links to the section t
 | Play a queue of songs in a call | `playlist`, `enqueue`, `idle` | [Playing an Audio Queue](#playing-an-audio-queue) |
 | Send video or share the screen in a call | `video: true`, `screenShare: true` | [Video Calls](#video-calls), [Screen Sharing](#screen-sharing) |
 | Call a whole group at once | `voip.callGroup` | [Group Calls](#group-calls) |
+| Download media, even after it expired | `sock.downloadMedia` | [Downloading Media](#-downloading-media) |
+| Send without bursting into a ban | `sendRateLimit` | [Sending rate limit](#sending-rate-limit) |
+| Move a paired session to another host | `exportSession`, `restoreSession` | [Moving a session to another host](#moving-a-session-to-another-host) |
+| Check whether numbers exist, in bulk | `sock.checkNumbers` | [Checking numbers in bulk](#checking-numbers-in-bulk) |
 | Read or change profile photos | profile photo helpers | [Profile Photos](#-profile-photos) |
 | Schedule a message for later | scheduled messages | [Scheduled Messages](#-scheduled-messages) |
 | Keep up with WhatsApp Web changes | `npm run wa:update` | [Updating the WhatsApp Web Version](#-updating-the-whatsapp-web-version) |
+| Seal the session on disk | `createAuthVault`, `auditAccountSecurity` | [Account Security](#-account-security) |
 | Know when my number is in trouble | account health signals | [Account Health Signals](#-account-health-signals) |
 | Understand LID versus PN JIDs | addressing helpers | [LID / PN / JID Addressing](#-lid--pn--jid-addressing) |
 | Understand why `conversation` is empty | `normalizeMessageContent` | [All Message Types](#-all-message-types) |
@@ -144,11 +149,16 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Imports](#-imports)
 - [Basic Connection](#-basic-connection)
 - [Session Storage](#-session-storage)
+  - [Encrypted session](#encrypted-session-recommended-for-any-number-you-keep)
+  - [Moving a session to another host](#moving-a-session-to-another-host)
 - [Pairing Code](#-pairing-code)
 - [Receiving Messages](#-receiving-messages)
+- [Downloading Media](#-downloading-media)
+- [TypeScript](#typescript)
 - [Events](#-events)
 - [LID / PN / JID Addressing](#-lid--pn--jid-addressing)
 - [Sending Messages](#-sending-messages)
+  - [Sending rate limit](#sending-rate-limit)
 - [External Ad Reply](#-external-ad-reply)
 - [Rich Link Cards](#-rich-link-cards)
 - [Integrated MessageBuilder](#-integrated-messagebuilder)
@@ -166,6 +176,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Privacy Settings](#-privacy-settings)
 - [All Message Types](#-all-message-types)
 - [Presence and Read Receipts](#-presence-and-read-receipts)
+  - [Checking numbers in bulk](#checking-numbers-in-bulk)
 - [Chat State](#-chat-state)
 - [Labels](#-labels)
 - [Business and Catalog](#-business-and-catalog)
@@ -176,6 +187,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Updating the WhatsApp Web Version](#-updating-the-whatsapp-web-version)
 - [Scheduled Messages](#-scheduled-messages)
 - [Modern WhatsApp Message APIs](#-modern-whatsapp-message-apis)
+- [Account Security](#-account-security)
 - [Account Health Signals](#-account-health-signals)
 - [Troubleshooting](#-troubleshooting)
 - [Credits](#-credits)
@@ -296,6 +308,24 @@ import makeWASocket, {
 
 ---
 
+### TypeScript
+
+The package ships hand-maintained declarations for the socket, the builders, and the message content. `AnyMessageContent`, `SendMessageOptions`, `ContactCheckResult`, `SendQueueStats`, and the session-backup options are real types now, so a typo such as `aiLabel` vs `ai_lable` is caught at build time:
+
+```ts
+import makeWASocket, { type AnyMessageContent, type SendMessageOptions } from 'zahan-baileys'
+
+const content: AnyMessageContent = { text: 'hello', aiLabel: true }
+const options: SendMessageOptions = { quoted: quotedMessage, skipRateLimit: true }
+
+await sock.sendMessage(jid, content, options)
+await sock.downloadMedia(msg, 'buffer', { startByte: 0 })
+```
+
+The declarations are tested with `npm run test:types` (`tsc --noEmit`), so keep that in CI next to `npm test`.
+
+---
+
 ## 🚀 Basic Connection
 
 ```js
@@ -397,6 +427,32 @@ import { useSingleFileAuthState } from 'zahan-baileys'
 const { state, saveCreds } = await useSingleFileAuthState('./session.json')
 ```
 
+### Encrypted session (recommended for any number you keep)
+
+A session file is a password: anyone who reads `creds.json` can act as the account without a QR scan. Seal it at rest:
+
+```js
+import { createAuthVault, useMultiFileAuthState } from 'zahan-baileys'
+
+const vault = await createAuthVault({ secret: process.env.SESSION_SECRET })
+const { state, saveCreds } = await useMultiFileAuthState('./session', { vault })
+```
+
+Every record is encrypted with AES-256-GCM, the key is derived from the secret with scrypt, and the record name is authenticated as additional data — a stolen file cannot be moved into another key slot, and an edited byte is rejected instead of decrypted.
+
+The same options work on every backend:
+
+```js
+await useSingleFileAuthState('./session.json', { secret: process.env.SESSION_SECRET })
+await useSqliteAuthState({ dbPath: './session.db', secret: process.env.SESSION_SECRET })
+await usePostgresAuthState({ connectionString: process.env.DATABASE_URL, secret: process.env.SESSION_SECRET })
+await useMySQLAuthState({ uri: process.env.MYSQL_URL, secret: process.env.SESSION_SECRET })
+await useMongoAuthState({ uri: process.env.MONGO_URL, secret: process.env.SESSION_SECRET })
+await useRedisAuthState({ uri: process.env.REDIS_URL, secret: process.env.SESSION_SECRET })
+```
+
+Pass a passphrase of at least 16 characters, or a 32-byte `Buffer` from a secret manager. Keep it out of the repository and out of the session folder: lose it and you pair again, change it and you re-seal the session. Existing plaintext records are never accepted silently — see [Account Security](#-account-security) for the one-time migration.
+
 ### SQLite
 
 ```bash
@@ -479,6 +535,25 @@ The first argument must be a connected NekoDB instance; the collection defaults 
 ```js
 const { state, saveCreds } = await useNekoDBAuth(db, 'my_sessions')
 ```
+
+### Moving a session to another host
+
+`exportSession` seals the credentials and every signal key into one string, and `restoreSession` writes it back into a fresh auth state, so a panel or a new server can come up without pairing again:
+
+```js
+import { useMultiFileAuthState, exportSession, restoreSession } from 'zahan-baileys'
+
+const { state } = await useMultiFileAuthState('session')
+const blob = await exportSession(state, { secret: process.env.SESSION_SECRET })
+await writeFile('session.zsess', blob)
+
+// on the other host
+const fresh = await useMultiFileAuthState('session')
+const result = await restoreSession(fresh.state, blob, { secret: process.env.SESSION_SECRET })
+// { creds: true, types: ['pre-key', 'session', ...], keyCount: 214, missing: [] }
+```
+
+The blob starts with `zsess1.` and is sealed with the same AES-256-GCM + scrypt envelope as the session vault, so a leaked backup is useless without the secret. Key types the backend cannot enumerate are listed in `missing` instead of being dropped silently. `sessionBackupFingerprint(blob)` returns a 16-character id you can log to tell two backups apart.
 
 ### Caching Signal Keys
 
@@ -714,6 +789,72 @@ View-once text uses the extension wrapper:
 ```js
 { viewOnceMessageV2Extension: { message: { extendedTextMessage: { text, viewOnce: true } } } }
 ```
+
+### AI label (business bot)
+
+WhatsApp shows a small **AI** chip on a message when the sender is a bot, so the other side knows no human typed it. **It is on by default**: every message you send in a private chat carries the label, and groups, status, and channels are skipped automatically.
+
+```js
+const sock = makeWASocket({ auth })                       // labelled by default
+await sock.sendMessage(jid, { text: 'Your order ships tomorrow.' })
+
+const plain = makeWASocket({ auth, aiLabel: false })      // turn it off for the whole socket
+await sock.sendMessage(jid, { text: 'typed by a human' }, { aiLabel: false })   // or one message
+await sock.sendMessage(jid, { text: 'typed by a human', aiLabel: false })       // same, in the content
+await sock.sendAiMessage(jid, { text: 'Your order ships tomorrow.' })           // always labelled
+await sock.sendBizBotMessage(jid, { image, caption: 'Here is the photo' })
+```
+
+`aiLabel` adds a `<bot biz_bot="1"/>` node to the outgoing stanza and writes the AI support payload into `messageContextInfo` — exactly what WhatsApp Web sends for a business AI answer. The older `ai: true` spelling is still accepted, and a message that already carries the node never gets a second one.
+
+- **Private chats only** (PN or LID). With the default on, groups, status, and channels simply skip the label. Asking for it explicitly there throws a `400`, because the label does not exist in those chats.
+- Works through `relayMessage` and the builders as well:
+
+```js
+await sock.relayMessage(jid, message, { messageId, aiLabel: true })
+await new Button(sock).setBody('Pick one').addButton('Yes', 'yes').send(jid, { aiLabel: true })
+```
+
+- **Only label content a bot actually wrote.** The chip is a statement to the recipient; send human-typed replies with `aiLabel: false`, or disable it on the socket and enable it per message instead.
+- The label is stanza metadata. It says the sender is a bot; it does not mark a photo or video as AI-generated. For that, set media provenance in the context info:
+
+```js
+await sock.sendMessage(jid, {
+  image: { url: './generated.png' },
+  caption: 'Made with an image model',
+  contextInfo: {
+    aiProvenance: {
+      c2PaMetadata: { createdWithGenAi: true },
+      iptcMetadata: { createdWithGenAi: true }
+    }
+  }
+})
+```
+
+### Sending rate limit
+
+Sending in bursts is what gets a fresh number banned fastest. Turn on the built-in per-chat queue and let it space the sends:
+
+```js
+const sock = makeWASocket({
+  auth,
+  sendRateLimit: {
+    perChatMs: 1500,      // one more message per chat every 1.5s after the burst
+    burst: 3,             // the first three go out immediately
+    jitter: 250,          // up to 250ms of extra randomness
+    maxQueue: 200,        // reject with 429 instead of growing forever
+    simulateTyping: true  // 'composing' presence + a short pause before each send
+  }
+})
+
+await sock.sendMessage(jid, { text: 'one' })
+await sock.sendMessage(jid, { text: 'two' }, { skipRateLimit: true })   // urgent, bypass the queue
+
+sock.sendQueueStats()      // { chats, queued, sent, delayed, rejected, perChatMs, ... }
+await sock.flushSendQueue()   // flush the queue on shutdown
+```
+
+The queue is per chat, so a busy group never delays a private reply. `sendRateLimit: true` uses the defaults, and the limiter stays off unless you ask for it.
 
 ### Mentions (people and groups)
 
@@ -2395,6 +2536,39 @@ status.
 
 ---
 
+## ⏬ Downloading Media
+
+`sock.downloadMedia` is the socket-level shorthand for `downloadMediaMessage`. It wires the media-retry hook for you, so a media URL WhatsApp has already expired (`404`/`410`) is requested again from the sender's device once and then downloaded a second time:
+
+```js
+const buffer = await sock.downloadMedia(msg)                 // Buffer
+const stream = await sock.downloadMedia(msg, 'stream')       // Readable, nothing kept in RAM
+const ranged = await sock.downloadMedia(msg, 'buffer', { startByte: 0, endByte: 65535 })
+
+await sock.downloadMedia(msg, 'buffer', {}, { recover: false })  // fail on the first error
+await sock.downloadMedia(msg, 'buffer', {}, { cache: false })    // skip the buffer cache
+```
+
+Recent buffers are kept in a bounded cache (16 entries / 32 MB / 10 minutes by default) so a thumbnail, a re-render, and a retry do not fetch the same file three times:
+
+```js
+makeWASocket({ auth, mediaDownloadCache: { ttlMs: 60_000, max: 8, maxBytes: 16 * 1024 * 1024 } })
+makeWASocket({ auth, mediaDownloadCache: false })   // disable it
+
+sock.mediaCacheStats()   // { entries, bytes, ttlMs, max, maxBytes, maxEntryBytes }
+sock.clearMediaCache()
+```
+
+Ask the sender for a fresh copy explicitly:
+
+```js
+const refreshed = await sock.requestMediaReupload(msg)   // same as sock.updateMediaMessage(msg)
+```
+
+> A bot only receives the re-upload answer from the **sender's** device. If your bot sent the file and WhatsApp has expired it, nothing can re-upload it from the bot side — keep your own copy (or upload it again) when the file matters.
+
+---
+
 ## 👁️ View Once
 
 View-once media is stored again when someone reacts to it with **any emoji** or replies to it.
@@ -2414,6 +2588,8 @@ const socket = makeWASocket({
     maxBytes: 64 * 1024 * 1024,
     captionPrefix: '👁️',
     singleUse: false,
+    recover: true,         // re-request media WhatsApp has already expired
+    downloadOptions: {},   // passed to the downloader untouched
     onRetrieved: ({ key, type, mimetype }) => console.log('opened', key.id, type)
   }
 })
@@ -2451,6 +2627,8 @@ unwrapViewOnce(msg.message)          // { imageMessage: { ... } }
 getViewOnceMediaType(msg.message)    // 'image' | 'video' | 'audio'
 describeViewOnce(msg.message)        // { type, mimetype, caption, fileLength, ... }
 ```
+
+View-once files are the first thing WhatsApp deletes, so by the time someone reacts the media URL often answers `404` or `410`. With `recover: true` (the default) the download asks the sender's device to re-upload the file once through the media-retry stanza and then fetches it again; the recovered `directPath` is applied to the message so `messages.update` listeners see the fresh URL. Set `recover: false` to fail on the first error instead. `downloadOptions` (`startByte`, `endByte`, `options.headers`, …) is forwarded to the downloader as-is, which is what you want for range requests or a proxy.
 
 `DEFAULT_VIEW_ONCE_TRIGGER_EMOJIS` (`['🔓', '📥']`) is still exported for the old,
 unlock-emoji-only behaviour.
@@ -3250,6 +3428,29 @@ for (const entry of results) {
   console.log(entry.jid, entry.exists)
 }
 ```
+
+#### Checking numbers in bulk
+
+`checkNumbers` checks a list in chunks, caches the answer for five minutes, and remembers missing numbers too, so a bot that validates a contact list does not ask the server the same question twice:
+
+```js
+const results = await sock.checkNumbers(['6281234567890', '+6289876543210', 'not a number'], {
+  chunkSize: 100,
+  concurrency: 3,
+  delayMs: 250   // pause between chunks
+})
+// [{ jid: '6281234567890@s.whatsapp.net', exists: true, cached: false }, ...]
+
+sock.contactCheckStats()   // { hits, misses, keys, ttlMs, max }
+sock.clearContactCache()
+```
+
+```js
+makeWASocket({ auth, contactCheckCache: { ttlMs: 15 * 60 * 1000, max: 10_000 } })
+makeWASocket({ auth, contactCheckCache: false })   // always ask the server
+```
+
+`onWhatsApp` uses the same cache, so consecutive calls for the same numbers are free.
 
 Looking up a JID by username:
 
@@ -4245,6 +4446,113 @@ import {
   makeStatusAudienceMetadata
 } from 'zahan-baileys'
 ```
+
+---
+
+## 🔐 Account Security
+
+A WhatsApp session is bearer credentials. The phone number stays yours, but whoever holds `creds.json` (or the database row) can send, read, and link devices as you until you log out every linked device. This section keeps that file from being a free pass.
+
+### Seal the session
+
+```js
+import { createAuthVault } from 'zahan-baileys'
+
+const vault = await createAuthVault({ secret: process.env.SESSION_SECRET })
+console.log(vault.fingerprint) // log this; never log the secret
+```
+
+`createAuthVault` derives a 256-bit key with scrypt (`N = 2^15`, `r = 8`, `p = 1` by default) and returns an object with `seal(record, plaintext)`, `open(record, envelope)`, `isSealed(value)`, `fingerprint`, and `rotate(nextSecret)`. The envelope is `zvault1.<salt>.<iv>.<tag>.<ciphertext>` in base64url, so it survives files, JSON columns, Redis hashes, and message queues unchanged.
+
+What makes it stronger than a plain AES call:
+
+- **Authenticated**: GCM authenticates the ciphertext, so a modified record fails with `AUTH_VAULT_DAMAGED` instead of decrypting to garbage.
+- **Bound to the record name**: `creds:creds` and `session:947…` are part of the additional data. Copying a valid sealed value over another key breaks the tag.
+- **Per-install salt**: every vault starts with a random 16-byte salt, stored inside each envelope, so two bots with the same passphrase still derive different keys.
+- **Fresh IV per write**: a 12-byte random IV, never reused.
+- **Explicit failures**: plaintext records raise `AUTH_VAULT_PLAINTEXT`; a short secret raises `AUTH_VAULT_INVALID_SECRET` unless `allowWeakSecret: true`.
+
+The factories accept either `vault` or `secret` — with `secret` they build the vault for you and return it in the result, which is what the audit below wants:
+
+```js
+const { state, saveCreds, vault } = await useMultiFileAuthState('./session', { secret: process.env.SESSION_SECRET })
+```
+
+### Migrate and rotate an existing session
+
+Plaintext records are refused on purpose; reading them silently would make the vault decorative. Convert once with a helper that reads each file, seals it, verifies the round trip, and replaces it atomically:
+
+```js
+import { createAuthVault, migrateMultiFileSession } from 'zahan-baileys'
+
+const vault = await createAuthVault({ secret: process.env.SESSION_SECRET })
+const result = await migrateMultiFileSession('./session', { vault })
+console.log(result) // { total, migrated, rotated, skipped, failed, fingerprint }
+```
+
+Rotating the passphrase is the same call with the old vault supplied:
+
+```js
+const next = await vault.rotate(newSecret)
+await migrateMultiFileSession('./session', { vault: next, from: vault })
+```
+
+For SQL, Mongo, and Redis there is no folder to walk; pass `allowPlaintext: true` once, then call `saveCreds()` — the next write seals the record. `encryptAuthStore(store, vault)` wraps any store with the `read`/`readMany`/`write`/`apply` interface if you built your own.
+
+### Audit before you deploy
+
+```js
+import { auditAccountSecurity, formatAccountSecurityReport } from 'zahan-baileys'
+
+const report = await auditAccountSecurity({
+  authState: state,
+  vault,
+  sessionPath: './session',
+  preKeyCount: 20
+})
+
+console.log(formatAccountSecurityReport(report))
+if (!report.safe) throw new Error('session is not safe to deploy')
+```
+
+The report carries `score` (0–100), `grade` (`A`–`F`), `safe`, per-severity counts, and one entry per finding with a copy-pasteable `fix`. Checks:
+
+| Check | Severity | Meaning |
+|---|---|---|
+| `session-plaintext` | critical | A stored record still contains readable Signal keys |
+| `creds-keys-missing` | critical | Noise key, signed identity key, signed pre-key, or adv secret is absent |
+| `session-vault-missing` | high | The session is not sealed |
+| `session-permissions` / `session-file-permissions` | high | Group or world readable on POSIX |
+| `creds-me-missing` | high | Registered but no account id |
+| `pairing-incomplete` | high | A pairing code was requested and never finished |
+| `prekey-low` | medium | Fewer than 5 pre-keys remain |
+| `session-path-missing` | medium | The folder or file does not exist |
+| `session-not-paired` | info | Expected before the first QR scan |
+| `session-vault` | info | Vault enabled, with the key fingerprint |
+
+Throwing variant:
+
+```js
+import { assertAccountSecurity } from 'zahan-baileys'
+
+await assertAccountSecurity({ authState: state, vault, sessionPath: './session' })
+```
+
+It throws `AccountSecurityError` with `code: 'ACCOUNT_SECURITY_UNSAFE'` and the full `report`, so a bot can refuse to start instead of running with a world-readable session.
+
+### Tighten the file modes
+
+The file backends now create sessions with `0600` files and a `0700` folder. Sessions that predate that, or a shared host where another user could read the old folder, need one pass:
+
+```js
+import { restrictSessionPermissions } from 'zahan-baileys'
+
+await restrictSessionPermissions('./session') // files 0600, folder 0700
+```
+
+### What this protects, and what it does not
+
+It stops a stolen backup, a copy of the database, a leaked object-storage key, a session folder pushed to GitHub, or another local user reading the keys. It does not stop a rollback to an older, still valid sealed copy of the session, a host that is already compromised while the bot runs — the secret has to be in memory to decrypt — and it does not change anything on WhatsApp's side: two-step verification, passkeys, and approving linked devices still happen on your phone. Treat the secret like a password, keep it in the environment or a secret manager, and log the fingerprint, never the secret.
 
 ---
 

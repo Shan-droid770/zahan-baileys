@@ -15,10 +15,34 @@ export * from "./Voip/index.js";
 import baseMakeWASocket from './Socket/index.js';
 import type { NewsletterStatusFetchOptions, NewsletterStatusList, NewsletterStatusSendOptions, NewsletterStatusSendResult, NewsletterStatusStanzaResult, NewsletterStatusUpdatesFetchOptions } from './Utils/newsletter-status.js';
 import type { StatusSendOptions } from './Utils/status-send.js';
+import type { AnyMessageContent, CheckNumbersOptions, ContactCheckResult, DownloadMediaHelperOptions, DownloadMediaOptions, MediaDownloadType, SendMessageOptions, SendQueueStats } from './Types/Content.js';
 import type { ViewOnceRetrievalOptions } from './Utils/view-once.js';
 import type { getResourceUsage, trimMemory } from './Utils/resource-guard.js';
 type BaseWASocket = ReturnType<typeof baseMakeWASocket>;
 export type WASocket = BaseWASocket & {
+    sendMessage: (jid: string | string[], content: AnyMessageContent | string, options?: SendMessageOptions) => Promise<import('../WAProto/index.js').proto.WebMessageInfo | undefined>;
+    sendAiMessage: (jid: string, content: AnyMessageContent | string, options?: SendMessageOptions) => Promise<import('../WAProto/index.js').proto.WebMessageInfo | undefined>;
+    sendBizBotMessage: (jid: string, content: AnyMessageContent | string, options?: SendMessageOptions) => Promise<import('../WAProto/index.js').proto.WebMessageInfo | undefined>;
+    downloadMedia: {
+        (message: any, type: 'stream', options?: DownloadMediaOptions, helperOptions?: DownloadMediaHelperOptions): Promise<import('stream').Readable>;
+        (message: any, type?: 'buffer', options?: DownloadMediaOptions, helperOptions?: DownloadMediaHelperOptions): Promise<Buffer>;
+    };
+    requestMediaReupload: (message: any) => Promise<any>;
+    clearMediaCache: () => void;
+    mediaCacheStats: () => {
+        entries: number;
+        bytes: number;
+    } | null;
+    sendLimiter: any;
+    sendQueueStats: () => SendQueueStats | null;
+    flushSendQueue: () => Promise<void>;
+    checkNumbers: (numbers: string | string[], options?: CheckNumbersOptions) => Promise<ContactCheckResult[]>;
+    clearContactCache: () => void;
+    contactCheckStats: () => {
+        hits: number;
+        misses: number;
+        keys: number;
+    } | null;
     sendNewsletterStatus: (jid: string, content: any, options?: NewsletterStatusSendOptions) => Promise<NewsletterStatusSendResult>;
     sendNewsletterStatusReaction: (jid: string, parentServerId: string | number, reaction: string, options?: Pick<NewsletterStatusSendOptions, 'messageId' | 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;
     revokeNewsletterStatus: (jid: string, statusId: string, options?: Pick<NewsletterStatusSendOptions, 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;

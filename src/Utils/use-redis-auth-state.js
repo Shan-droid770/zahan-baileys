@@ -8,6 +8,7 @@ const resolveCommand = (client, names) => {
     }
     throw new Error(`redis client exposes none of: ${names.join(', ')}`);
 };
+const resolveOptionalCommand = (client, names) => names.find(name => typeof client[name] === 'function');
 export async function useRedisAuthState(opts = {}) {
     const session = opts.session ?? 'default';
     const prefix = opts.prefix ?? 'baileys_auth';
@@ -29,6 +30,7 @@ export async function useRedisAuthState(opts = {}) {
         hmget: resolveCommand(client, ['hmGet', 'hmget']),
         hset: resolveCommand(client, ['hSet', 'hset']),
         hdel: resolveCommand(client, ['hDel', 'hdel']),
+        hkeys: resolveOptionalCommand(client, ['hKeys', 'hkeys']),
         del: resolveCommand(client, ['del', 'DEL']),
         keys: resolveCommand(client, ['keys', 'KEYS'])
     };
@@ -51,6 +53,13 @@ export async function useRedisAuthState(opts = {}) {
                 }
             });
             return rows;
+        },
+        list: async (type) => {
+            if (!commands.hkeys) {
+                return undefined;
+            }
+            const keys = await client[commands.hkeys](hashKey(type));
+            return Array.isArray(keys) ? keys : [];
         },
         write: async (type, id, value) => {
             await client[commands.hset](hashKey(type), id, value);
@@ -86,5 +95,5 @@ export async function useRedisAuthState(opts = {}) {
             }
         }
     };
-    return makeAuthStateFromStore(store);
+    return makeAuthStateFromStore(store, opts);
 }

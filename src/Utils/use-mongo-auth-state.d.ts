@@ -7,6 +7,13 @@ export interface MongoAuthStateOptions {
     dbName?: string;
     collectionName?: string;
     session?: string;
+    vault?: import('./auth-vault.js').AuthVault;
+    secret?: import('./auth-vault.js').AuthVaultSecret;
+    passphrase?: string;
+    allowPlaintext?: boolean;
+    requireVault?: boolean;
+    kdf?: import('./auth-vault.js').AuthVaultKdfOptions;
+    salt?: string | Buffer | Uint8Array;
 }
 export function useMongoAuthState(opts?: MongoAuthStateOptions): Promise<{
     state: {
@@ -19,4 +26,5 @@ export function useMongoAuthState(opts?: MongoAuthStateOptions): Promise<{
     saveCreds: () => Promise<void>;
     clearAuth: () => Promise<void>;
     close: () => Promise<void>;
+    vault: import('./auth-vault.js').AuthVault | null;
 }>;

@@ -34,6 +34,10 @@ export async function useMongoAuthState(opts = {}) {
             }
             return rows;
         },
+        list: async (type) => {
+            const docs = await collection.find({ session, type }).project({ id: 1 }).toArray();
+            return docs.map((doc) => doc.id);
+        },
         write: async (type, id, value) => {
             await collection.updateOne({ session, type, id }, { $set: { value } }, { upsert: true });
         },
@@ -64,5 +68,5 @@ export async function useMongoAuthState(opts = {}) {
             await client?.close();
         }
     };
-    return makeAuthStateFromStore(store);
+    return makeAuthStateFromStore(store, opts);
 }

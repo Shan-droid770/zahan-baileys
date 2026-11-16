@@ -1,5 +1,16 @@
 /* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
-export function useSingleFileAuthState(fileName: any): Promise<{
+import type { AuthVault, AuthVaultKdfOptions, AuthVaultSecret } from './auth-vault.js';
+export interface SingleFileAuthStateOptions {
+    vault?: AuthVault;
+    secret?: AuthVaultSecret;
+    passphrase?: string;
+    allowPlaintext?: boolean;
+    requireVault?: boolean;
+    kdf?: AuthVaultKdfOptions;
+    salt?: string | Buffer | Uint8Array;
+    flushTimeoutMs?: number;
+}
+export function useSingleFileAuthState(fileName: string, options?: SingleFileAuthStateOptions): Promise<{
     state: {
         creds: any;
         keys: {
@@ -8,4 +19,5 @@ export function useSingleFileAuthState(fileName: any): Promise<{
         };
     };
     saveCreds: () => void;
+    vault: AuthVault | null;
 }>;
