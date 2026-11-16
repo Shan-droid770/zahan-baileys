@@ -2114,7 +2114,7 @@ export const shouldApplyAiLabel = (jid, config, ...sources) => {
             return decision;
         }
     }
-    return config?.aiLabel !== false && supportsAiLabel(jid);
+    return config?.aiLabel === true && supportsAiLabel(jid);
 };
 
 export const applyAiLabelSupportPayload = (message) => {
@@ -2124,12 +2124,19 @@ export const applyAiLabelSupportPayload = (message) => {
     return message;
 };
 
-export const withAiLabel = (jid, message, additionalNodes = []) => {
+export const assertAiLabelSupported = (jid) => {
     if (!supportsAiLabel(jid)) {
         throw new Boom('the AI label is only allowed in private chats, not in groups, status, or channels', {
             statusCode: 400,
             data: { jid }
         });
+    }
+    return true;
+};
+
+export const withAiLabel = (jid, message, additionalNodes = []) => {
+    if (!supportsAiLabel(jid)) {
+        return additionalNodes;
     }
     applyAiLabelSupportPayload(message);
     if (hasAiLabelNode(additionalNodes)) {

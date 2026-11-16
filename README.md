@@ -792,22 +792,24 @@ View-once text uses the extension wrapper:
 
 ### AI label (business bot)
 
-WhatsApp shows a small **AI** chip on a message when the sender is a bot, so the other side knows no human typed it. **It is on by default**: every message you send in a private chat carries the label, and groups, status, and channels are skipped automatically.
+WhatsApp shows a small **AI** chip on a message when the sender is a bot, so the other side knows no human typed it. It is **off by default** and has to be enabled per socket or per message:
 
 ```js
-const sock = makeWASocket({ auth })                       // labelled by default
+const sock = makeWASocket({ auth, aiLabel: true })     // label every private-chat message
 await sock.sendMessage(jid, { text: 'Your order ships tomorrow.' })
 
-const plain = makeWASocket({ auth, aiLabel: false })      // turn it off for the whole socket
-await sock.sendMessage(jid, { text: 'typed by a human' }, { aiLabel: false })   // or one message
-await sock.sendMessage(jid, { text: 'typed by a human', aiLabel: false })       // same, in the content
-await sock.sendAiMessage(jid, { text: 'Your order ships tomorrow.' })           // always labelled
+await sock.sendMessage(jid, { text: 'an AI answer', aiLabel: true })   // or one message at a time
+await sock.sendAiMessage(jid, { text: 'Your order ships tomorrow.' })  // always labelled
 await sock.sendBizBotMessage(jid, { image, caption: 'Here is the photo' })
+
+await sock.sendMessage(jid, { text: 'typed by a human' }, { aiLabel: false })  // opt out again
 ```
 
 `aiLabel` adds a `<bot biz_bot="1"/>` node to the outgoing stanza and writes the AI support payload into `messageContextInfo` — exactly what WhatsApp Web sends for a business AI answer. The older `ai: true` spelling is still accepted, and a message that already carries the node never gets a second one.
 
-- **Private chats only** (PN or LID). With the default on, groups, status, and channels simply skip the label. Asking for it explicitly there throws a `400`, because the label does not exist in those chats.
+> **Keep it off unless the number really is a WhatsApp Business AI/bot account.** The marker tells WhatsApp a business bot wrote the message; on a personal number the server can silently drop or hide labelled messages in private chats, which looks like the bot never replied even though `sendMessage` resolved. Groups are unaffected either way, so a group bot can keep working while private replies vanish — that is the symptom to watch for.
+
+- **Private chats only** (PN or LID). Groups, status, and channels never carry the label, and asking for it there is a no-op, so a shared send helper that always sets `aiLabel: true` cannot break a group command. Use `supportsAiLabel(jid)` when you need to know, or `assertAiLabelSupported(jid)` if you would rather get the `400`.
 - Works through `relayMessage` and the builders as well:
 
 ```js

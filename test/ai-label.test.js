@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_LABEL_NODE_ATTRS, AI_LABEL_NODE_TAG, aiLabelDecision, applyAiLabelSupportPayload, hasAiLabelNode, isAiLabelRequested, makeAiLabelNode, shouldApplyAiLabel, supportsAiLabel, withAiLabel } from '../src/Utils/messages.js';
+import { AI_LABEL_NODE_ATTRS, AI_LABEL_NODE_TAG, aiLabelDecision, applyAiLabelSupportPayload, assertAiLabelSupported, hasAiLabelNode, isAiLabelRequested, makeAiLabelNode, shouldApplyAiLabel, supportsAiLabel, withAiLabel } from '../src/Utils/messages.js';
 import { BIZ_BOT_SUPPORT_PAYLOAD } from '../src/Defaults/index.js';
 import { prepareModernMessageContent } from '../src/Utils/modern-messages.js';
 
@@ -55,11 +55,15 @@ test('withAiLabel appends a node without mutating the caller array', () => {
     assert.deepEqual(nodes[1], makeAiLabelNode());
     assert.ok(message.messageContextInfo.supportPayload);
 
-    assert.throws(() => withAiLabel('123456789-987654@g.us', {}, []), (error) => {
+    assert.deepEqual(withAiLabel('123456789-987654@g.us', {}, []), [], 'groups skip the label instead of throwing');
+    assert.deepEqual(withAiLabel('status@broadcast', {}, []), []);
+    assert.deepEqual(withAiLabel('120363000000000000@newsletter', {}, []), []);
+    assert.throws(() => assertAiLabelSupported('123456789-987654@g.us'), (error) => {
         assert.equal(error.output?.statusCode, 400);
         assert.match(error.message, /private chats/);
         return true;
     });
+    assert.equal(assertAiLabelSupported(pn), true);
 });
 
 test('the modern content preparation keeps the AI label flag', () => {
@@ -70,19 +74,21 @@ test('the modern content preparation keeps the AI label flag', () => {
     assert.equal(legacy.ai, true);
 });
 
-test('the AI label is on by default for private chats and can be opted out', () => {
+test('the AI label is opt-in and can be switched off per message', () => {
     assert.equal(aiLabelDecision({}), undefined);
     assert.equal(aiLabelDecision({ aiLabel: false }), false);
     assert.equal(aiLabelDecision({ ai: true }), true);
     assert.equal(aiLabelDecision(undefined), undefined);
 
-    assert.equal(shouldApplyAiLabel(pn, {}), true, 'default config labels private chats');
-    assert.equal(shouldApplyAiLabel(lid, {}), true);
-    assert.equal(shouldApplyAiLabel(pn, { aiLabel: false }), false, 'the socket can disable it');
-    assert.equal(shouldApplyAiLabel(pn, {}, { aiLabel: false }), false, 'a message can opt out');
+    assert.equal(shouldApplyAiLabel(pn, {}), false, 'off unless the socket asks for it');
+    assert.equal(shouldApplyAiLabel(lid, {}), false);
+    assert.equal(shouldApplyAiLabel(pn, { aiLabel: true }), true, 'the socket can enable it');
+    assert.equal(shouldApplyAiLabel(lid, { aiLabel: true }), true);
+    assert.equal(shouldApplyAiLabel(pn, { aiLabel: true }, { aiLabel: false }), false, 'a message can opt out');
     assert.equal(shouldApplyAiLabel(pn, { aiLabel: false }, { aiLabel: true }), true, 'an explicit message wins');
     assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}), false, 'groups never get it by default');
-    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}, { aiLabel: true }), true, 'an explicit request still throws later');
+    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', { aiLabel: true }), false, 'the socket switch never labels a group');
+    assert.equal(shouldApplyAiLabel('123456789-987654@g.us', {}, { aiLabel: true }), true, 'the request is honoured, then skipped by the stanza');
     assert.equal(shouldApplyAiLabel('status@broadcast', {}), false);
     assert.equal(shouldApplyAiLabel('120363000000000000@newsletter', {}), false);
 });

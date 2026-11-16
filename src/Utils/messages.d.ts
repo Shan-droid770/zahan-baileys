@@ -71,6 +71,7 @@ export function hasAiLabelNode(nodes: any[]): boolean;
 export function shouldApplyAiLabel(jid: string, config: any, ...sources: any[]): boolean;
 export function applyAiLabelSupportPayload(message: any): any;
 export function withAiLabel(jid: string, message: any, additionalNodes?: any[]): any[];
+export function assertAiLabelSupported(jid: string): true;
 export function assertMediaContent(content: any): any;
 export function shouldIncludeBizBinaryNode(message: any): boolean;
 import { proto } from '../../WAProto/index.js';
