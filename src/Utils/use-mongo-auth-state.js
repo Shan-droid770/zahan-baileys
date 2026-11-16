@@ -64,5 +64,5 @@ export async function useMongoAuthState(opts = {}) {
             await client?.close();
         }
     };
-    return makeAuthStateFromStore(store);
+    return makeAuthStateFromStore(store, opts);
 }

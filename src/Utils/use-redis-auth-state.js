@@ -86,5 +86,5 @@ export async function useRedisAuthState(opts = {}) {
             }
         }
     };
-    return makeAuthStateFromStore(store);
+    return makeAuthStateFromStore(store, opts);
 }

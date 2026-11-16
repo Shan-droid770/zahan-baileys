@@ -127,6 +127,7 @@ New here? This is the whole library in one view. Each row links to the section t
 | Read or change profile photos | profile photo helpers | [Profile Photos](#-profile-photos) |
 | Schedule a message for later | scheduled messages | [Scheduled Messages](#-scheduled-messages) |
 | Keep up with WhatsApp Web changes | `npm run wa:update` | [Updating the WhatsApp Web Version](#-updating-the-whatsapp-web-version) |
+| Seal the session on disk | `createAuthVault`, `auditAccountSecurity` | [Account Security](#-account-security) |
 | Know when my number is in trouble | account health signals | [Account Health Signals](#-account-health-signals) |
 | Understand LID versus PN JIDs | addressing helpers | [LID / PN / JID Addressing](#-lid--pn--jid-addressing) |
 | Understand why `conversation` is empty | `normalizeMessageContent` | [All Message Types](#-all-message-types) |
@@ -144,6 +145,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Imports](#-imports)
 - [Basic Connection](#-basic-connection)
 - [Session Storage](#-session-storage)
+  - [Encrypted session](#encrypted-session-recommended-for-any-number-you-keep)
 - [Pairing Code](#-pairing-code)
 - [Receiving Messages](#-receiving-messages)
 - [Events](#-events)
@@ -176,6 +178,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Updating the WhatsApp Web Version](#-updating-the-whatsapp-web-version)
 - [Scheduled Messages](#-scheduled-messages)
 - [Modern WhatsApp Message APIs](#-modern-whatsapp-message-apis)
+- [Account Security](#-account-security)
 - [Account Health Signals](#-account-health-signals)
 - [Troubleshooting](#-troubleshooting)
 - [Credits](#-credits)
@@ -396,6 +399,32 @@ import { useSingleFileAuthState } from 'zahan-baileys'
 
 const { state, saveCreds } = await useSingleFileAuthState('./session.json')
 ```
+
+### Encrypted session (recommended for any number you keep)
+
+A session file is a password: anyone who reads `creds.json` can act as the account without a QR scan. Seal it at rest:
+
+```js
+import { createAuthVault, useMultiFileAuthState } from 'zahan-baileys'
+
+const vault = await createAuthVault({ secret: process.env.SESSION_SECRET })
+const { state, saveCreds } = await useMultiFileAuthState('./session', { vault })
+```
+
+Every record is encrypted with AES-256-GCM, the key is derived from the secret with scrypt, and the record name is authenticated as additional data — a stolen file cannot be moved into another key slot, and an edited byte is rejected instead of decrypted.
+
+The same options work on every backend:
+
+```js
+await useSingleFileAuthState('./session.json', { secret: process.env.SESSION_SECRET })
+await useSqliteAuthState({ dbPath: './session.db', secret: process.env.SESSION_SECRET })
+await usePostgresAuthState({ connectionString: process.env.DATABASE_URL, secret: process.env.SESSION_SECRET })
+await useMySQLAuthState({ uri: process.env.MYSQL_URL, secret: process.env.SESSION_SECRET })
+await useMongoAuthState({ uri: process.env.MONGO_URL, secret: process.env.SESSION_SECRET })
+await useRedisAuthState({ uri: process.env.REDIS_URL, secret: process.env.SESSION_SECRET })
+```
+
+Pass a passphrase of at least 16 characters, or a 32-byte `Buffer` from a secret manager. Keep it out of the repository and out of the session folder: lose it and you pair again, change it and you re-seal the session. Existing plaintext records are never accepted silently — see [Account Security](#-account-security) for the one-time migration.
 
 ### SQLite
 
@@ -4245,6 +4274,113 @@ import {
   makeStatusAudienceMetadata
 } from 'zahan-baileys'
 ```
+
+---
+
+## 🔐 Account Security
+
+A WhatsApp session is bearer credentials. The phone number stays yours, but whoever holds `creds.json` (or the database row) can send, read, and link devices as you until you log out every linked device. This section keeps that file from being a free pass.
+
+### Seal the session
+
+```js
+import { createAuthVault } from 'zahan-baileys'
+
+const vault = await createAuthVault({ secret: process.env.SESSION_SECRET })
+console.log(vault.fingerprint) // log this; never log the secret
+```
+
+`createAuthVault` derives a 256-bit key with scrypt (`N = 2^15`, `r = 8`, `p = 1` by default) and returns an object with `seal(record, plaintext)`, `open(record, envelope)`, `isSealed(value)`, `fingerprint`, and `rotate(nextSecret)`. The envelope is `zvault1.<salt>.<iv>.<tag>.<ciphertext>` in base64url, so it survives files, JSON columns, Redis hashes, and message queues unchanged.
+
+What makes it stronger than a plain AES call:
+
+- **Authenticated**: GCM authenticates the ciphertext, so a modified record fails with `AUTH_VAULT_DAMAGED` instead of decrypting to garbage.
+- **Bound to the record name**: `creds:creds` and `session:947…` are part of the additional data. Copying a valid sealed value over another key breaks the tag.
+- **Per-install salt**: every vault starts with a random 16-byte salt, stored inside each envelope, so two bots with the same passphrase still derive different keys.
+- **Fresh IV per write**: a 12-byte random IV, never reused.
+- **Explicit failures**: plaintext records raise `AUTH_VAULT_PLAINTEXT`; a short secret raises `AUTH_VAULT_INVALID_SECRET` unless `allowWeakSecret: true`.
+
+The factories accept either `vault` or `secret` — with `secret` they build the vault for you and return it in the result, which is what the audit below wants:
+
+```js
+const { state, saveCreds, vault } = await useMultiFileAuthState('./session', { secret: process.env.SESSION_SECRET })
+```
+
+### Migrate and rotate an existing session
+
+Plaintext records are refused on purpose; reading them silently would make the vault decorative. Convert once with a helper that reads each file, seals it, verifies the round trip, and replaces it atomically:
+
+```js
+import { createAuthVault, migrateMultiFileSession } from 'zahan-baileys'
+
+const vault = await createAuthVault({ secret: process.env.SESSION_SECRET })
+const result = await migrateMultiFileSession('./session', { vault })
+console.log(result) // { total, migrated, rotated, skipped, failed, fingerprint }
+```
+
+Rotating the passphrase is the same call with the old vault supplied:
+
+```js
+const next = await vault.rotate(newSecret)
+await migrateMultiFileSession('./session', { vault: next, from: vault })
+```
+
+For SQL, Mongo, and Redis there is no folder to walk; pass `allowPlaintext: true` once, then call `saveCreds()` — the next write seals the record. `encryptAuthStore(store, vault)` wraps any store with the `read`/`readMany`/`write`/`apply` interface if you built your own.
+
+### Audit before you deploy
+
+```js
+import { auditAccountSecurity, formatAccountSecurityReport } from 'zahan-baileys'
+
+const report = await auditAccountSecurity({
+  authState: state,
+  vault,
+  sessionPath: './session',
+  preKeyCount: 20
+})
+
+console.log(formatAccountSecurityReport(report))
+if (!report.safe) throw new Error('session is not safe to deploy')
+```
+
+The report carries `score` (0–100), `grade` (`A`–`F`), `safe`, per-severity counts, and one entry per finding with a copy-pasteable `fix`. Checks:
+
+| Check | Severity | Meaning |
+|---|---|---|
+| `session-plaintext` | critical | A stored record still contains readable Signal keys |
+| `creds-keys-missing` | critical | Noise key, signed identity key, signed pre-key, or adv secret is absent |
+| `session-vault-missing` | high | The session is not sealed |
+| `session-permissions` / `session-file-permissions` | high | Group or world readable on POSIX |
+| `creds-me-missing` | high | Registered but no account id |
+| `pairing-incomplete` | high | A pairing code was requested and never finished |
+| `prekey-low` | medium | Fewer than 5 pre-keys remain |
+| `session-path-missing` | medium | The folder or file does not exist |
+| `session-not-paired` | info | Expected before the first QR scan |
+| `session-vault` | info | Vault enabled, with the key fingerprint |
+
+Throwing variant:
+
+```js
+import { assertAccountSecurity } from 'zahan-baileys'
+
+await assertAccountSecurity({ authState: state, vault, sessionPath: './session' })
+```
+
+It throws `AccountSecurityError` with `code: 'ACCOUNT_SECURITY_UNSAFE'` and the full `report`, so a bot can refuse to start instead of running with a world-readable session.
+
+### Tighten the file modes
+
+The file backends now create sessions with `0600` files and a `0700` folder. Sessions that predate that, or a shared host where another user could read the old folder, need one pass:
+
+```js
+import { restrictSessionPermissions } from 'zahan-baileys'
+
+await restrictSessionPermissions('./session') // files 0600, folder 0700
+```
+
+### What this protects, and what it does not
+
+It stops a stolen backup, a copy of the database, a leaked object-storage key, a session folder pushed to GitHub, or another local user reading the keys. It does not stop a rollback to an older, still valid sealed copy of the session, a host that is already compromised while the bot runs — the secret has to be in memory to decrypt — and it does not change anything on WhatsApp's side: two-step verification, passkeys, and approving linked devices still happen on your phone. Treat the secret like a password, keep it in the environment or a secret manager, and log the fingerprint, never the secret.
 
 ---
 

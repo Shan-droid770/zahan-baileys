@@ -76,5 +76,5 @@ export async function usePostgresAuthState(opts = {}) {
             }
         }
     };
-    return makeAuthStateFromStore(store);
+    return makeAuthStateFromStore(store, opts);
 }

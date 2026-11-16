@@ -30,6 +30,60 @@ import { useSingleFileAuthState } from 'zahan-baileys'
 const { state, saveCreds } = await useSingleFileAuthState('./session.json')
 ```
 
+## Encrypting the session
+
+A session file is bearer credentials: anyone who can read it can use the account without scanning a QR code. Seal it at rest with a vault, and every record is encrypted with AES-256-GCM under a key derived from your secret with scrypt. The record name is authenticated as additional data, so a sealed value cannot be moved to another key and an edited record is rejected instead of decrypted.
+
+```js
+import { createAuthVault, useMultiFileAuthState } from 'zahan-baileys'
+
+const vault = await createAuthVault({ secret: process.env.SESSION_SECRET })
+const { state, saveCreds } = await useMultiFileAuthState('./session', { vault })
+```
+
+Every backend takes the same pair of options, `vault` or `secret`:
+
+```js
+await useSingleFileAuthState('./session.json', { secret: process.env.SESSION_SECRET })
+await useSqliteAuthState({ dbPath: './session.db', secret: process.env.SESSION_SECRET })
+await usePostgresAuthState({ connectionString: process.env.DATABASE_URL, secret: process.env.SESSION_SECRET })
+```
+
+Plaintext records are never read silently once a vault is configured; they raise `AUTH_VAULT_PLAINTEXT`. Migrate an existing folder once:
+
+```js
+import { migrateMultiFileSession } from 'zahan-baileys'
+
+const result = await migrateMultiFileSession('./session', { vault })
+```
+
+Rotate the passphrase with the old vault in hand:
+
+```js
+const next = await vault.rotate(newSecret)
+await migrateMultiFileSession('./session', { vault: next, from: vault })
+```
+
+For a database, pass `allowPlaintext: true` for one run and call `saveCreds()`; the next write seals the row. Keep the secret in the environment or a secret manager, never beside the session. Losing it means pairing again.
+
+## Auditing the session
+
+```js
+import { auditAccountSecurity, formatAccountSecurityReport } from 'zahan-baileys'
+
+const report = await auditAccountSecurity({ authState: state, vault, sessionPath: './session' })
+console.log(formatAccountSecurityReport(report))
+```
+
+The report scores the session from 0 to 100, assigns a grade, and lists findings such as a plaintext record, world-readable files, missing keys, or a wallet of pre-keys running dry. Use `assertAccountSecurity` instead if the bot should refuse to start when something is wrong:
+
+```js
+import { assertAccountSecurity, restrictSessionPermissions } from 'zahan-baileys'
+
+await restrictSessionPermissions('./session')
+await assertAccountSecurity({ authState: state, vault, sessionPath: './session' })
+```
+
 ## SQLite
 
 Keys live in a real database, so concurrent reads and large key sets stay fast. Needs `better-sqlite3` v11, v12, or v13.

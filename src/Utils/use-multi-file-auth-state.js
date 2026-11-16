@@ -5,6 +5,7 @@ import { join } from 'path';
 import { proto } from '../../WAProto/index.js';
 import { initAuthCreds } from './auth-utils.js';
 import { BufferJSON } from './generics.js';
+import { AuthVaultError, AuthVaultErrorCode, resolveAuthVault } from './auth-vault.js';
 
 const fileLocks = new Map();
 
@@ -30,21 +31,36 @@ const withFileLock = async (path, work) => {
 
 export const countAuthFileLocks = () => fileLocks.size;
 
-export const useMultiFileAuthState = async (folder) => {
+const fixFileName = (file) => file?.replace(/\//g, '__')?.replace(/:/g, '-');
+
+export const useMultiFileAuthState = async (folder, options = {}) => {
+    const vault = await resolveAuthVault(options, 'useMultiFileAuthState');
+    const allowPlaintext = options.allowPlaintext === true;
+    const recordName = (file) => `file:${fixFileName(file)}`;
 
     const writeData = async (data, file) => {
         const filePath = join(folder, fixFileName(file));
-        return withFileLock(filePath, () => writeFile(filePath, JSON.stringify(data, BufferJSON.replacer)));
+        const serialized = JSON.stringify(data, BufferJSON.replacer);
+        const payload = vault ? await vault.seal(recordName(file), serialized) : serialized;
+        return withFileLock(filePath, () => writeFile(filePath, payload, { mode: 0o600 }));
     };
     const readData = async (file) => {
         try {
             const filePath = join(folder, fixFileName(file));
             return await withFileLock(filePath, async () => {
-                const data = await readFile(filePath, { encoding: 'utf-8' });
-                return JSON.parse(data, BufferJSON.reviver);
+                const raw = await readFile(filePath, { encoding: 'utf-8' });
+                const sealed = Boolean(vault?.isSealed(raw));
+                if (vault && !sealed && !allowPlaintext) {
+                    throw new AuthVaultError(AuthVaultErrorCode.plaintext, `\`${filePath}\` is a plaintext session record; seal it with migrateMultiFileSession or pass allowPlaintext: true to migrate an existing session`, { path: filePath });
+                }
+                const text = sealed ? await vault.open(recordName(file), raw) : raw;
+                return JSON.parse(text, BufferJSON.reviver);
             });
         }
         catch (error) {
+            if (error instanceof AuthVaultError) {
+                throw error;
+            }
             return null;
         }
     };
@@ -68,9 +84,8 @@ export const useMultiFileAuthState = async (folder) => {
         }
     }
     else {
-        await mkdir(folder, { recursive: true });
+        await mkdir(folder, { recursive: true, mode: 0o700 });
     }
-    const fixFileName = (file) => file?.replace(/\//g, '__')?.replace(/:/g, '-');
     const creds = (await readData('creds.json')) || initAuthCreds();
     return {
         state: {
@@ -102,6 +117,7 @@ export const useMultiFileAuthState = async (folder) => {
         },
         saveCreds: async () => {
             return writeData(creds, 'creds.json');
-        }
+        },
+        vault
     };
 };

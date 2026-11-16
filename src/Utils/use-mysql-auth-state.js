@@ -76,5 +76,5 @@ export async function useMySQLAuthState(opts = {}) {
             }
         }
     };
-    return makeAuthStateFromStore(store);
+    return makeAuthStateFromStore(store, opts);
 }

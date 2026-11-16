@@ -4,12 +4,17 @@ import { DEFAULT_CACHE_TTLS } from '../Defaults/index.js';
 import { proto } from '../../WAProto/index.js';
 import { initAuthCreds } from './auth-utils.js';
 import { BufferJSON } from './generics.js';
+import { AuthVaultError, AuthVaultErrorCode, resolveAuthVault } from './auth-vault.js';
 import { LRUCache } from 'lru-cache';
 import { Mutex } from 'async-mutex';
 
-const FLUSH_TIMEOUT_MS = 3000;
+const DEFAULT_FLUSH_TIMEOUT_MS = 3000;
+const VAULT_RECORD = 'file:session';
 
-export const useSingleFileAuthState = async (fileName) => {
+export const useSingleFileAuthState = async (fileName, options = {}) => {
+    const vault = await resolveAuthVault(options, 'useSingleFileAuthState');
+    const allowPlaintext = options.allowPlaintext === true;
+    const flushTimeoutMs = options.flushTimeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS;
     const cache = new LRUCache({
         max: 20000,
         ttl: 1000 * DEFAULT_CACHE_TTLS.SIGNAL_STORE,
@@ -27,13 +32,22 @@ export const useSingleFileAuthState = async (fileName) => {
             if (isLoaded)
                 return;
             try {
-                const data = JSON.parse(await readFile(fileName, 'utf-8'), BufferJSON.reviver);
+                const raw = await readFile(fileName, 'utf-8');
+                const sealed = Boolean(vault?.isSealed(raw));
+                if (vault && !sealed && !allowPlaintext) {
+                    throw new AuthVaultError(AuthVaultErrorCode.plaintext, `\`${fileName}\` is a plaintext session file; seal it with a vault or pass allowPlaintext: true to migrate an existing session`, { path: fileName });
+                }
+                const text = sealed ? await vault.open(VAULT_RECORD, raw) : raw;
+                const data = JSON.parse(text, BufferJSON.reviver);
                 fileData = data || {};
                 for (const [keyName, value] of Object.entries(fileData)) {
                     cache.set(keyName, value);
                 }
             }
-            catch {
+            catch (error) {
+                if (error instanceof AuthVaultError) {
+                    throw error;
+                }
                 fileData = {};
             }
             isLoaded = true;
@@ -46,13 +60,15 @@ export const useSingleFileAuthState = async (fileName) => {
             flushTimeout = null;
             await mutex.runExclusive(async () => {
                 try {
+                    const serialized = JSON.stringify(fileData, BufferJSON.replacer);
+                    const payload = vault ? await vault.seal(VAULT_RECORD, serialized) : serialized;
                     const tempFile = fileName + '.temp';
-                    await writeFile(tempFile, JSON.stringify(fileData, BufferJSON.replacer));
+                    await writeFile(tempFile, payload, { mode: 0o600 });
                     await rename(tempFile, fileName);
                 }
                 catch { }
             });
-        }, FLUSH_TIMEOUT_MS);
+        }, flushTimeoutMs);
     };
     const writeKey = (keyName, value) => {
         cache.set(keyName, value);
@@ -66,7 +82,8 @@ export const useSingleFileAuthState = async (fileName) => {
     };
     const fileInfo = await stat(fileName).catch(() => null);
     if (!fileInfo) {
-        await writeFile(fileName, '{}');
+        const empty = JSON.stringify({}, BufferJSON.replacer);
+        await writeFile(fileName, vault ? await vault.seal(VAULT_RECORD, empty) : empty, { mode: 0o600 });
     }
     else if (!fileInfo.isFile()) {
         throw new Error(`found something that is not a file at ${fileName}, either delete it or specify a different location`);
@@ -104,6 +121,7 @@ export const useSingleFileAuthState = async (fileName) => {
                 }
             }
         },
-        saveCreds: () => writeKey('creds', creds)
+        saveCreds: () => writeKey('creds', creds),
+        vault
     };
 };

@@ -2,6 +2,7 @@
 import { proto } from '../../WAProto/index.js';
 import { initAuthCreds } from './auth-utils.js';
 import { BufferJSON } from './generics.js';
+import { encryptAuthStore, resolveAuthVault } from './auth-vault.js';
 export const CREDS_KEY = 'creds';
 export const encodeAuthValue = (value) => JSON.stringify(value, BufferJSON.replacer);
 export const decodeAuthValue = (type, raw) => {
@@ -25,15 +26,17 @@ export const loadOptionalModule = async (name, usedBy) => {
         throw helpful;
     }
 };
-export const makeAuthStateFromStore = async (store) => {
-    const stored = await store.read(CREDS_KEY, CREDS_KEY);
+export const makeAuthStateFromStore = async (store, options = {}) => {
+    const vault = await resolveAuthVault(options, 'makeAuthStateFromStore');
+    const secured = vault ? encryptAuthStore(store, vault, { allowPlaintext: options.allowPlaintext === true }) : store;
+    const stored = await secured.read(CREDS_KEY, CREDS_KEY);
     const creds = decodeAuthValue(CREDS_KEY, stored) ?? initAuthCreds();
     const state = {
         creds,
         keys: {
             get: async (type, ids) => {
                 const data = {};
-                const rows = await store.readMany(type, ids);
+                const rows = await secured.readMany(type, ids);
                 for (const id of ids) {
                     const value = decodeAuthValue(type, rows[id]);
                     if (value) {
@@ -57,7 +60,7 @@ export const makeAuthStateFromStore = async (store) => {
                     }
                 }
                 if (writes.length || removals.length) {
-                    await store.apply(writes, removals);
+                    await secured.apply(writes, removals);
                 }
             }
         }
@@ -65,13 +68,14 @@ export const makeAuthStateFromStore = async (store) => {
     return {
         state,
         saveCreds: async () => {
-            await store.write(CREDS_KEY, CREDS_KEY, encodeAuthValue(creds));
+            await secured.write(CREDS_KEY, CREDS_KEY, encodeAuthValue(creds));
         },
         clearAuth: async () => {
-            await store.clear();
+            await secured.clear();
         },
         close: async () => {
-            await store.close?.();
-        }
+            await secured.close?.();
+        },
+        vault
     };
 };

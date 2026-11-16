@@ -2,6 +2,7 @@
 import { proto } from '../../WAProto/index.js';
 import { initAuthCreds } from './auth-utils.js';
 import { BufferJSON } from './generics.js';
+import { AuthVaultError, AuthVaultErrorCode, resolveAuthVault } from './auth-vault.js';
 async function loadBetterSqlite3() {
     try {
 
@@ -29,7 +30,23 @@ CREATE TABLE IF NOT EXISTS signal_keys (
 );
 CREATE INDEX IF NOT EXISTS signal_keys_type_idx ON signal_keys(type);
 `;
-export async function useSqliteAuthState(opts) {
+export async function useSqliteAuthState(opts = {}) {
+    const vault = await resolveAuthVault(opts, 'useSqliteAuthState');
+    const allowPlaintext = opts.allowPlaintext === true;
+    const recordName = (type, id) => `sqlite:${type}:${id}`;
+    const openValue = async (record, raw) => {
+        if (raw === null || raw === undefined) {
+            return null;
+        }
+        if (vault?.isSealed(raw)) {
+            return vault.open(record, raw);
+        }
+        if (vault && !allowPlaintext) {
+            throw new AuthVaultError(AuthVaultErrorCode.plaintext, `the session row \`${record}\` is stored in plaintext; seal it first or pass allowPlaintext: true to migrate an existing session`, { record });
+        }
+        return raw;
+    };
+    const sealValue = async (record, text) => vault ? vault.seal(record, text) : text;
     let db;
     let owned = false;
     if (opts.database) {
@@ -55,16 +72,16 @@ export async function useSqliteAuthState(opts) {
         clearKeys: db.prepare('DELETE FROM signal_keys'),
         clearCreds: db.prepare('DELETE FROM creds')
     };
-    const loadCreds = () => {
+    const loadCreds = async () => {
         const row = stmts.credsSelect.get(CREDS_ROW_KEY);
         if (!row)
             return initAuthCreds();
-        return JSON.parse(row.value, BufferJSON.reviver);
+        return JSON.parse(await openValue('sqlite:creds', row.value), BufferJSON.reviver);
     };
-    const persistCreds = (creds) => {
-        stmts.credsUpsert.run(CREDS_ROW_KEY, JSON.stringify(creds, BufferJSON.replacer));
+    const persistCreds = async (creds) => {
+        stmts.credsUpsert.run(CREDS_ROW_KEY, await sealValue('sqlite:creds', JSON.stringify(creds, BufferJSON.replacer)));
     };
-    const creds = loadCreds();
+    const creds = await loadCreds();
     return {
         state: {
             creds,
@@ -74,7 +91,7 @@ export async function useSqliteAuthState(opts) {
                     for (const id of ids) {
                         const row = stmts.keySelect.get(type, id);
                         if (row) {
-                            let value = JSON.parse(row.value, BufferJSON.reviver);
+                            let value = JSON.parse(await openValue(recordName(type, id), row.value), BufferJSON.reviver);
                             if (type === 'app-state-sync-key' && value) {
                                 value = proto.Message.AppStateSyncKeyData.fromObject(value);
                             }
@@ -84,17 +101,24 @@ export async function useSqliteAuthState(opts) {
                     return data;
                 },
                 set: async (data) => {
+                    const operations = [];
+                    for (const category in data) {
+                        for (const id in data[category]) {
+                            const value = data[category][id];
+                            operations.push({
+                                category,
+                                id,
+                                payload: value ? await sealValue(recordName(category, id), JSON.stringify(value, BufferJSON.replacer)) : null
+                            });
+                        }
+                    }
                     const writeTx = db.transaction(() => {
-                        for (const category in data) {
-                            for (const id in data[category]) {
-                                const value = data[category][id];
-                                if (value) {
-                                    const stringified = JSON.stringify(value, BufferJSON.replacer);
-                                    stmts.keyUpsert.run(category, id, stringified);
-                                }
-                                else {
-                                    stmts.keyDelete.run(category, id);
-                                }
+                        for (const operation of operations) {
+                            if (operation.payload) {
+                                stmts.keyUpsert.run(operation.category, operation.id, operation.payload);
+                            }
+                            else {
+                                stmts.keyDelete.run(operation.category, operation.id);
                             }
                         }
                     });
@@ -103,8 +127,9 @@ export async function useSqliteAuthState(opts) {
             }
         },
         saveCreds: async () => {
-            persistCreds(creds);
+            await persistCreds(creds);
         },
+        vault,
         clearAuth: async () => {
             const wipe = db.transaction(() => {
                 stmts.clearKeys.run();

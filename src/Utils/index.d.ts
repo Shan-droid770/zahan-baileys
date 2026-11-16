@@ -15,6 +15,8 @@ export * from "./use-multi-file-auth-state.js";
 export * from "./use-single-file-auth-state.js";
 export * from "./use-sqlite-auth-state.js";
 export * from "./auth-store.js";
+export * from "./auth-vault.js";
+export * from "./account-security.js";
 export * from "./use-postgres-auth-state.js";
 export * from "./use-mysql-auth-state.js";
 export * from "./use-mongo-auth-state.js";
