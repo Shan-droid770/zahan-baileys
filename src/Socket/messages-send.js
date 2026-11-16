@@ -1496,10 +1496,11 @@ export const makeMessagesSocket = (config) => {
                 }
 
                 if (isAiMsg && !isProtocolOp && !aiLabelApplied) {
-                    for (const node of withAiLabel(jid, fullMsg.message, [])) {
+                    const labelNodes = withAiLabel(jid, fullMsg.message, []);
+                    for (const node of labelNodes) {
                         additionalNodes.push(node);
                     }
-                    aiLabelApplied = true;
+                    aiLabelApplied = labelNodes.length > 0;
                 }
                 await relayMessage(jid, fullMsg.message, {
                     messageId: fullMsg.key.id,

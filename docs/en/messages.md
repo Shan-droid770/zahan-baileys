@@ -96,7 +96,7 @@ await sock.sendMessage(jid, { text: 'typed by a human' }, { aiLabel: false })
 makeWASocket({ auth, aiLabel: false })                                // off for the socket
 ```
 
-It adds a `<bot biz_bot="1"/>` node and the AI support payload to the stanza. Groups, status, and channels skip it by default, and asking for it explicitly there returns a `400`. `relayMessage` and the builders accept the same `aiLabel` option, and the older `ai: true` spelling still works.
+It adds a `<bot biz_bot="1"/>` node and the AI support payload to the stanza. Groups, status, and channels never carry it: asking there is a no-op, so a shared send helper that always sets `aiLabel: true` still delivers group commands. `supportsAiLabel(jid)` reports whether a chat can take the label, and `assertAiLabelSupported(jid)` throws the `400` when you want it. `relayMessage` and the builders accept the same `aiLabel` option, and the older `ai: true` spelling still works.
 
 ### Image
 

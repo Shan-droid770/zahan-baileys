@@ -174,5 +174,5 @@ test('the AI label node is a biz bot stanza node', () => {
     const nodes = withAiLabel(jid, { messageContextInfo: {} }, [{ tag: 'meta', attrs: {} }]);
     assert.equal(nodes.length, 2);
     assert.deepEqual(nodes[1], { tag: 'bot', attrs: { biz_bot: '1' }, content: undefined });
-    assert.throws(() => withAiLabel('123456789-987654@g.us', {}, []), (error) => error.output?.statusCode === 400);
+    assert.deepEqual(withAiLabel('123456789-987654@g.us', {}, []), [], 'groups never carry the label');
 });

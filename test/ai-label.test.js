@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_LABEL_NODE_ATTRS, AI_LABEL_NODE_TAG, aiLabelDecision, applyAiLabelSupportPayload, hasAiLabelNode, isAiLabelRequested, makeAiLabelNode, shouldApplyAiLabel, supportsAiLabel, withAiLabel } from '../src/Utils/messages.js';
+import { AI_LABEL_NODE_ATTRS, AI_LABEL_NODE_TAG, aiLabelDecision, applyAiLabelSupportPayload, assertAiLabelSupported, hasAiLabelNode, isAiLabelRequested, makeAiLabelNode, shouldApplyAiLabel, supportsAiLabel, withAiLabel } from '../src/Utils/messages.js';
 import { BIZ_BOT_SUPPORT_PAYLOAD } from '../src/Defaults/index.js';
 import { prepareModernMessageContent } from '../src/Utils/modern-messages.js';
 
@@ -55,11 +55,15 @@ test('withAiLabel appends a node without mutating the caller array', () => {
     assert.deepEqual(nodes[1], makeAiLabelNode());
     assert.ok(message.messageContextInfo.supportPayload);
 
-    assert.throws(() => withAiLabel('123456789-987654@g.us', {}, []), (error) => {
+    assert.deepEqual(withAiLabel('123456789-987654@g.us', {}, []), [], 'groups skip the label instead of throwing');
+    assert.deepEqual(withAiLabel('status@broadcast', {}, []), []);
+    assert.deepEqual(withAiLabel('120363000000000000@newsletter', {}, []), []);
+    assert.throws(() => assertAiLabelSupported('123456789-987654@g.us'), (error) => {
         assert.equal(error.output?.statusCode, 400);
         assert.match(error.message, /private chats/);
         return true;
     });
+    assert.equal(assertAiLabelSupported(pn), true);
 });
 
 test('the modern content preparation keeps the AI label flag', () => {
