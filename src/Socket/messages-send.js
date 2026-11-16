@@ -3,8 +3,8 @@ import { TTLCache } from '../Utils/ttl-cache.js';
 import { Boom } from '@hapi/boom';
 import { randomBytes } from 'crypto';
 import { proto } from '../../WAProto/index.js';
-import { BIZ_BOT_SUPPORT_PAYLOAD, DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, MAX_OUTBOUND_RESEND_ENTRIES, MEMBER_LABEL_MAX_LENGTH, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
-import { aggregateMessageKeysNotFromMe, assertMediaContent, assertMeId, bindWaitForEvent, decryptMediaRetryData, DEF_MEDIA_HOST, delay, encodeNewsletterMessage, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateParticipantHashV2, generateWAMessage, generateWAMessageFromContent, getPollOptionHash, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, hasValidAlbumMedia, MessageRetryManager, normalizeMessageContent, parseAndInjectE2ESessions, prepareWAMessageMedia, shouldIncludeBizBinaryNode, unixTimestampSeconds } from '../Utils/index.js';
+import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, MAX_OUTBOUND_RESEND_ENTRIES, MEMBER_LABEL_MAX_LENGTH, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
+import { aggregateMessageKeysNotFromMe, assertMediaContent, assertMeId, bindWaitForEvent, decryptMediaRetryData, DEF_MEDIA_HOST, delay, encodeNewsletterMessage, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateParticipantHashV2, generateWAMessage, generateWAMessageFromContent, getPollOptionHash, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, hasValidAlbumMedia, isAiLabelRequested, MessageRetryManager, normalizeMessageContent, parseAndInjectE2ESessions, prepareWAMessageMedia, shouldIncludeBizBinaryNode, unixTimestampSeconds, withAiLabel } from '../Utils/index.js';
 import { AssociationType } from '../Types/index.js';
 import { makeStatusMentionMessage } from '../Utils/modern-messages.js';
 import { commitSenderKeyDelivery, pickSenderKeyRecipients, senderKeyResetSummary } from '../Utils/sender-key-memory.js';
@@ -451,7 +451,7 @@ export const makeMessagesSocket = (config) => {
         }
         return { nodes, shouldIncludeDeviceIdentity };
     };
-    const relayMessage = async (jid, message, { messageId: msgId, participant, additionalAttributes, additionalNodes, useUserDevicesCache, useCachedGroupMetadata, addBizAttributes, statusJidList }) => {
+    const relayMessage = async (jid, message, { messageId: msgId, participant, additionalAttributes, additionalNodes, useUserDevicesCache, useCachedGroupMetadata, addBizAttributes, statusJidList, aiLabel, ai }) => {
         const meId = assertMeId(authState.creds);
         const meLid = authState.creds.me?.lid;
         const isRetryResend = Boolean(participant?.jid);
@@ -464,6 +464,9 @@ export const makeMessagesSocket = (config) => {
         const isNewsletter = server === 'newsletter';
         const isGroupOrStatus = isGroup || isStatus;
         const finalJid = jid;
+        if (isAiLabelRequested({ aiLabel, ai })) {
+            additionalNodes = withAiLabel(jid, message, additionalNodes ?? []);
+        }
         msgId = msgId || generateMessageIDV2(meId);
         if (!isRetryResend) {
             rememberOutboundMessage(msgId, jid, message);
@@ -1430,7 +1433,7 @@ export const makeMessagesSocket = (config) => {
                 const isPinMsg = 'pin' in content && !!content.pin;
                 const isKeepMsg = 'keep' in content && !!content.keep;
                 const isPollResultMsg = 'pollResult' in content && !!content.pollResult;
-                const isAiMsg = 'ai' in content && !!content.ai;
+                const isAiMsg = isAiLabelRequested(content) || isAiLabelRequested(options);
                 const isNeedBizAttrs = 'secureMetaServiceLabel' in content && !!content.secureMetaServiceLabel;
                 const additionalAttributes = options.additionalAttributes || {};
                 const additionalNodes = options.additionalNodes || [];
@@ -1484,21 +1487,13 @@ export const makeMessagesSocket = (config) => {
                 }
 
                 else if (isAiMsg) {
-                    if (!(isPnUser(jid) || isLidUser(jid))) {
-                        throw new Boom('AI icon on message are only allowed in private chat', { statusCode: 400 });
+                    for (const node of withAiLabel(jid, fullMsg.message, [])) {
+                        additionalNodes.push(node);
                     }
-                    if ('messageContextInfo' in fullMsg.message && !!fullMsg.message.messageContextInfo) {
-                        fullMsg.message.messageContextInfo.supportPayload = BIZ_BOT_SUPPORT_PAYLOAD;
+                    if (content && typeof content === 'object') {
+                        delete content.ai;
+                        delete content.aiLabel;
                     }
-                    ;
-                    additionalNodes.push({
-                        tag: 'bot',
-                        attrs: {
-                            biz_bot: '1'
-                        },
-                        content: undefined
-                    });
-                    delete content.ai;
                 }
                 await relayMessage(jid, fullMsg.message, {
                     messageId: fullMsg.key.id,

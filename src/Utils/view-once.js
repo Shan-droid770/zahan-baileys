@@ -143,7 +143,9 @@ export const openViewOnceMedia = async (message, options = {}) => {
         logger,
         mode = 'stream',
         maxBytes = DEFAULT_VIEW_ONCE_MAX_BYTES,
-        download = downloadMediaMessage
+        recover = true,
+        download = downloadMediaMessage,
+        downloadOptions
     } = options;
     const content = unwrapViewOnce(message?.message ?? message);
     const type = mediaTypeOfContent(content);
@@ -162,9 +164,9 @@ export const openViewOnceMedia = async (message, options = {}) => {
         key: message?.key,
         message: content
     };
-    const downloaded = await download(target, mode === 'buffer' ? 'buffer' : 'stream', {}, {
+    const downloaded = await download(target, mode === 'buffer' ? 'buffer' : 'stream', downloadOptions ?? {}, {
         logger,
-        reuploadRequest: sock?.updateMediaMessage ? messageToReupload => sock.updateMediaMessage(messageToReupload) : undefined
+        ...(recover && sock?.updateMediaMessage ? { reuploadRequest: messageToReupload => sock.updateMediaMessage(messageToReupload) } : {})
     });
     return {
         type,
@@ -232,6 +234,7 @@ const VIEW_ONCE_DEFAULTS = Object.freeze({
     cacheSize: DEFAULT_VIEW_ONCE_CACHE_SIZE,
     ttlMs: DEFAULT_VIEW_ONCE_TTL_MS,
     singleUse: false,
+    recover: true,
     ackEmoji: '✅',
     captionPrefix: undefined,
     captionSuffix: undefined,
@@ -318,8 +321,9 @@ export const bindViewOnceRetrieval = (sock, config = {}) => {
                 logger,
                 mode: options.mode,
                 maxBytes: options.maxBytes,
+                recover: options.recover,
                 download: options.download,
-                ...(options.downloadOptions || {})
+                downloadOptions: options.downloadOptions
             });
             const payload = buildViewOncePayload(media, options);
             const destination = options.forwardToJid || chat;

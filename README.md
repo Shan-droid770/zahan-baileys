@@ -744,6 +744,44 @@ View-once text uses the extension wrapper:
 { viewOnceMessageV2Extension: { message: { extendedTextMessage: { text, viewOnce: true } } } }
 ```
 
+### AI label (business bot)
+
+WhatsApp shows a small **AI** chip on a message when the sender is a bot, so the other side knows no human typed it. Turn it on per message:
+
+```js
+await sock.sendMessage(jid, { text: 'Your order ships tomorrow.', aiLabel: true })
+
+// the same thing, spelled as a method
+await sock.sendAiMessage(jid, { text: 'Your order ships tomorrow.' })
+await sock.sendBizBotMessage(jid, { image, caption: 'Here is the photo you asked for' })
+```
+
+`aiLabel: true` adds a `<bot biz_bot="1"/>` node to the outgoing stanza and writes the AI support payload into `messageContextInfo` — exactly what WhatsApp Web sends for a business AI answer. The older `ai: true` spelling is still accepted.
+
+- **Private chats only** (PN or LID). Groups, status, and channels raise a `400` because the label does not exist there.
+- Works through `relayMessage` and the builders as well:
+
+```js
+await sock.relayMessage(jid, message, { messageId, aiLabel: true })
+await new Button(sock).setBody('Pick one').addButton('Yes', 'yes').send(jid, { aiLabel: true })
+```
+
+- The label is stanza metadata. It says the sender is a bot; it does not mark a photo or video as AI-generated. For that, set media provenance in the context info:
+
+```js
+await sock.sendMessage(jid, {
+  image: { url: './generated.png' },
+  caption: 'Made with an image model',
+  aiLabel: true,
+  contextInfo: {
+    aiProvenance: {
+      c2PaMetadata: { createdWithGenAi: true },
+      iptcMetadata: { createdWithGenAi: true }
+    }
+  }
+})
+```
+
 ### Mentions (people and groups)
 
 ```js
@@ -2443,6 +2481,8 @@ const socket = makeWASocket({
     maxBytes: 64 * 1024 * 1024,
     captionPrefix: '👁️',
     singleUse: false,
+    recover: true,         // re-request media WhatsApp has already expired
+    downloadOptions: {},   // passed to the downloader untouched
     onRetrieved: ({ key, type, mimetype }) => console.log('opened', key.id, type)
   }
 })
@@ -2480,6 +2520,8 @@ unwrapViewOnce(msg.message)          // { imageMessage: { ... } }
 getViewOnceMediaType(msg.message)    // 'image' | 'video' | 'audio'
 describeViewOnce(msg.message)        // { type, mimetype, caption, fileLength, ... }
 ```
+
+View-once files are the first thing WhatsApp deletes, so by the time someone reacts the media URL often answers `404` or `410`. With `recover: true` (the default) the download asks the sender's device to re-upload the file once through the media-retry stanza and then fetches it again; the recovered `directPath` is applied to the message so `messages.update` listeners see the fresh URL. Set `recover: false` to fail on the first error instead. `downloadOptions` (`startByte`, `endByte`, `options.headers`, …) is forwarded to the downloader as-is, which is what you want for range requests or a proxy.
 
 `DEFAULT_VIEW_ONCE_TRIGGER_EMOJIS` (`['🔓', '📥']`) is still exported for the old,
 unlock-emoji-only behaviour.

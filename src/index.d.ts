@@ -19,6 +19,8 @@ import type { ViewOnceRetrievalOptions } from './Utils/view-once.js';
 import type { getResourceUsage, trimMemory } from './Utils/resource-guard.js';
 type BaseWASocket = ReturnType<typeof baseMakeWASocket>;
 export type WASocket = BaseWASocket & {
+    sendAiMessage: (jid: string, content: any, options?: any) => Promise<any>;
+    sendBizBotMessage: (jid: string, content: any, options?: any) => Promise<any>;
     sendNewsletterStatus: (jid: string, content: any, options?: NewsletterStatusSendOptions) => Promise<NewsletterStatusSendResult>;
     sendNewsletterStatusReaction: (jid: string, parentServerId: string | number, reaction: string, options?: Pick<NewsletterStatusSendOptions, 'messageId' | 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;
     revokeNewsletterStatus: (jid: string, statusId: string, options?: Pick<NewsletterStatusSendOptions, 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;

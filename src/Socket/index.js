@@ -17,6 +17,8 @@ const makeWASocket = (config) => {
     bindVoiceRecognition(sock, newConfig);
     const sendMessage = sock.sendMessage.bind(sock);
     sock.sendMessage = (jid, content, options = {}) => sendMessage(jid, prepareModernMessageContent(content), options);
+    sock.sendAiMessage = (jid, content, options = {}) => sock.sendMessage(jid, content, { ...options, aiLabel: true });
+    sock.sendBizBotMessage = sock.sendAiMessage;
     sock.sendNewsletterStatus = makeNewsletterStatusSender(sock, newConfig);
     sock.sendNewsletterStatusReaction = makeNewsletterStatusReactionSender(sock);
     sock.revokeNewsletterStatus = makeNewsletterStatusRevokeSender(sock);

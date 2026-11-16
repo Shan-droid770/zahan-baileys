@@ -86,6 +86,17 @@ await sock.sendMessage(jid, {
 })
 ```
 
+### AI label (business bot)
+
+WhatsApp draws a small **AI** chip on messages sent by a bot. Turn it on per message:
+
+```js
+await sock.sendMessage(jid, { text: 'Your order ships tomorrow.', aiLabel: true })
+await sock.sendAiMessage(jid, { text: 'Your order ships tomorrow.' })
+```
+
+It adds a `<bot biz_bot="1"/>` node and the AI support payload to the stanza, and only works in private chats — groups, status, and channels reject it. `relayMessage` and the builders accept the same `aiLabel` option. The older `ai: true` spelling still works.
+
 ### Image
 
 ```js
@@ -210,7 +221,9 @@ makeWASocket({
     emojis: null,          // default: any emoji; pass ['🔓', '📥'] to restrict
     asDocument: false,
     ackEmoji: '✅',
-    singleUse: false
+    singleUse: false,
+    recover: true,        // re-request media WhatsApp already expired (404/410)
+    downloadOptions: {}   // forwarded to the media downloader
   }
 })
 ```
