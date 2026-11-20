@@ -14,6 +14,7 @@ export function addTransactionCapability(state: any, logger: any, { maxCommitRet
     maxCommitRetries: any;
     delayBetweenTriesMs: any;
 }): {
+    list?: (type: string) => Promise<string[]> | string[];
     get: (type: any, ids: any) => Promise<any>;
     set: (data: any) => Promise<void>;
     isInTransaction: () => boolean;

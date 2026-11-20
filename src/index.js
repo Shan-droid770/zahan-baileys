@@ -1,5 +1,6 @@
 
 import makeWASocket from './Socket/index.js';
+import { makeMultiSessionManager } from './Utils/multi-session-manager.js';
 import { AIRich, Button, ButtonV2, Carousel, MessageBuilder, Toolkit } from './MessageBuilder/index.js';
 import * as messageBuilderExtras from './MessageBuilder/extras.js';
 import * as metaAiSections from './MessageBuilder/metaai.js';
@@ -43,6 +44,11 @@ for (const [name, member] of builderMembers) {
 }
 
 Object.freeze(MessageBuilder);
+
+export const createSessionManager = (options = {}) => makeMultiSessionManager({
+    ...options,
+    makeSocket: options.makeSocket ?? makeWASocket
+});
 
 export { makeWASocket };
 export default makeWASocket;

@@ -66,6 +66,13 @@ export function makeMessagesSocket(config: any): {
     }>;
     getUSyncDevices: (jids: any, useCache: any, ignoreZeroDevices: any) => Promise<any[]>;
     messageRetryManager: MessageRetryManager | null;
+    sessionRecovery: import('../Utils/session-recovery.js').SessionRecoveryManager;
+    recoverSession: (jid: string, request?: import('../Utils/session-recovery.js').SessionRecoveryRequest) => Promise<import('../Utils/session-recovery.js').SessionRecoveryResult>;
+    recoverSessions: (jids: string[], request?: import('../Utils/session-recovery.js').SessionRecoveryRequest) => Promise<{
+        results: import('../Utils/session-recovery.js').SessionRecoveryResult[];
+        summary: import('../Utils/session-recovery.js').SessionRecoveryStats;
+    }>;
+    sessionRecoveryStats: () => import('../Utils/session-recovery.js').SessionRecoveryStats;
     resetGroupSenderKey: (jid: string) => Promise<{ jid: string; cleared: number; devices: string[] }>;
     updateMemberLabel: (jid: string, memberLabel?: string | null, options?: {
         additionalNodes?: any[];

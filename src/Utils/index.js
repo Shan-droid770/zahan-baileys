@@ -25,6 +25,8 @@ export * from './link-preview.js';
 export * from './event-buffer.js';
 export * from './process-message.js';
 export * from './message-retry-manager.js';
+export * from './session-recovery.js';
+export * from './multi-session-manager.js';
 export * from './ttl-cache.js';
 export * from './contact-check.js';
 export * from './media-download-cache.js';

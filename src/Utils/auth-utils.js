@@ -138,6 +138,7 @@ export const addTransactionCapability = (state, logger, { maxCommitRetries, dela
         }
     }
     return {
+        ...(typeof state.list === 'function' ? { list: (type) => state.list(type) } : {}),
         get: async (type, ids) => {
             const ctx = txStorage.getStore();
             if (!ctx) {

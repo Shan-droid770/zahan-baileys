@@ -96,6 +96,8 @@ For questions, collaboration, bug reports, or anything else, reach out through t
 | 🤖 AI Rich | Experimental rich-response builder for text, code, tables, media, suggestions, and other layouts. |
 | 📞 Voice & video calls | Place audio, video, and screen-sharing calls on the bot's existing session, with playlists that drive the call. |
 | 🗄️ Database sessions | Store sessions in SQLite, PostgreSQL, MySQL, MongoDB, Redis, or NekoDB instead of files. |
+| 🩹 Instant Bad MAC recovery | Detects Signal MAC errors on the first retry, purges every related PN/LID/device session and resends with a fresh key bundle. |
+| 🧵 Multi-session manager | Bounded connect concurrency, shared handlers, serialised credential saves and backoff reconnects for many accounts in one process. |
 | 📦 ESM | ESM-first package requiring Node.js 20+; Node.js 22 or newer is recommended. |
 
 ### 🗺️ What Can I Do?
@@ -151,6 +153,7 @@ New here? This is the whole library in one view. Each row links to the section t
 - [Session Storage](#-session-storage)
   - [Encrypted session](#encrypted-session-recommended-for-any-number-you-keep)
   - [Moving a session to another host](#moving-a-session-to-another-host)
+- [Instant Bad MAC Recovery & Multi-Session Handling](#-instant-bad-mac-recovery--multi-session-handling)
 - [Pairing Code](#-pairing-code)
 - [Receiving Messages](#-receiving-messages)
 - [Downloading Media](#-downloading-media)
@@ -374,7 +377,7 @@ Pass `retryRequestDelayMs`, `maxMsgRetryCount`, and `connectTimeoutMs` to tune r
 
 ### Socket Options
 
-Other useful options include `auth`, `logger`, `browser`, `version`, `getMessage`, `shouldSyncHistoryMessage`, `patchMessageBeforeSending`, `cachedGroupMetadata`, `userDevicesCache`, `linkPreviewImageThumbnailWidth`, and `generateHighQualityLinkPreview`.
+Other useful options include `auth`, `logger`, `browser`, `version`, `getMessage`, `shouldSyncHistoryMessage`, `patchMessageBeforeSending`, `cachedGroupMetadata`, `userDevicesCache`, `sessionRecovery`, `linkPreviewImageThumbnailWidth`, and `generateHighQualityLinkPreview`.
 
 ### AnchorGuard (anti-crash / anti-ban)
 
@@ -597,6 +600,115 @@ store.bind(sock.ev)
 
 ---
 
+## 🩹 Instant Bad MAC Recovery & Multi-Session Handling
+
+### What "Bad MAC" means
+
+A `Bad MAC` / `Invalid message` failure means the Signal session stored for a device no longer matches the session the other side is using. The usual symptom is a message that stays as an encrypted placeholder, or a `receipt type="retry"` with `error="7"` that keeps coming back. Retrying with the same (stale) session cannot fix it.
+
+`zahan-baileys` now recovers **on the first occurrence**, without waiting for `maxMsgRetryCount`, the old `retryCount > 1` gate, or the one-hour session-recreation cooldown:
+
+1. Classifies the failure from the retry receipt (`error` codes 2, 3, 4, 7, 8, 9) or from the decryption stub text (`Bad MAC`, `Invalid message`, `MAC verification failed`).
+2. Purges **every** related Signal session in one key-store write: the exact device JID, the bare user JID, all devices from `device-list`, the PN ↔ LID counterpart, and any stored session address whose user matches. Group sender keys and `sender-key-memory` for that group are cleared too, so the next send redistributes the key.
+3. Resets retry counters, cached recent messages, base-key checks, pending phone requests and the device cache for that user.
+4. Fetches fresh key bundles with `assertSessions(..., true)` in **one** stanza for all affected devices, and includes our own pre-keys in the retry receipt so the peer can build a new session immediately.
+5. Emits `session.recovery` and exposes counters through `sock.sessionRecoveryStats()`.
+
+Concurrent recoveries for the same user are coalesced into one purge, and `recoverSessions()` batches several users into a single key-store write and a single bundle query. That is what keeps hundreds of sessions cheap.
+
+### Configuration
+
+```js
+const sock = makeWASocket({
+  auth: state,
+  sessionRecovery: {
+    enabled: true,              // set false to disable every automatic recovery
+    autoRecoverMacErrors: true, // retry receipts and decryption stubs
+    purgeRelatedSessions: true, // PN, LID, all known devices
+    refreshSessions: true,      // fetch fresh key bundles after the purge
+    purgeSenderKeys: true,      // clear group sender keys / sender-key-memory
+    purgeIdentityKeys: false,   // opt in only if identity changes are also broken
+    emitEvents: true,           // session.recovery
+    cooldownMs: 1500,           // suppresses duplicate auto recoveries in a burst
+    maxRefreshJids: 32          // cap devices per bundle query
+  }
+})
+```
+
+Partial objects are merged with the defaults, so `{ sessionRecovery: { purgeIdentityKeys: true } }` is enough. `sessionRecovery: false` disables automatic recovery; `force: true` on a manual call still works.
+
+### Manual recovery and observability
+
+```js
+const result = await sock.recoverSession('94770000000:12@s.whatsapp.net', {
+  reason: 'support ticket 481',
+  refreshSessions: true,
+  purgeSenderKeys: true,
+  force: true
+})
+// result.purged.sessions -> all deleted Signal addresses
+// result.refreshed       -> whether fresh bundles were fetched
+
+const batch = await sock.recoverSessions(
+  ['94770000000@s.whatsapp.net', '94771111111@s.whatsapp.net'],
+  { reason: 'scheduled maintenance' }
+)
+
+sock.ev.on('session.recovery', ({ jids, code, reason, results, purgedSessions, refreshed }) => {
+  console.log({ jids, code, reason, purgedSessions, refreshed, results })
+})
+
+console.log(sock.sessionRecoveryStats())
+```
+
+Lower-level helpers are exported too: `classifyRetryError`, `isMacErrorText`, `normalizeSessionRecovery`, `collectRecoveryTargets`, `makeSessionRecovery`, `MAC_ERROR_CODES`, and `SESSION_RECOVERY_CODES`.
+
+### Running many accounts in one process
+
+`createSessionManager` keeps each account's auth state, retry manager and caches isolated, while sharing one bounded connect queue, one event-fanout registration, serialised credential saves and one exponential-backoff reconnect policy:
+
+```js
+import { createSessionManager, useMultiFileAuthState } from 'zahan-baileys'
+
+const manager = createSessionManager({
+  concurrency: 4,                    // at most 4 sockets connecting at once
+  autoSaveCreds: true,               // serialises saveCreds per account
+  reconnect: {
+    maxAttempts: 10,
+    baseDelayMs: 1000,
+    maxDelayMs: 60_000,
+    jitter: 0.2
+  },
+  hooks: {
+    onError: (id, err, phase) => console.error(id, phase, err),
+    onRecovery: (id, payload) => console.log(id, 'recovered', payload.purgedSessions)
+  }
+})
+
+const off = manager.on('messages.upsert', (id, payload) => {
+  console.log(id, payload.messages.length) // one handler for current and future sessions
+})
+
+for (const id of ['sales', 'support', 'alerts']) {
+  const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${id}`)
+  await manager.add(id, { auth: state, saveCreds })
+}
+
+console.log(manager.stats())
+console.log(manager.list())                 // per-account state, attempts, user, socket
+await manager.recoverAll(['94770000000@s.whatsapp.net'])
+await manager.restart('sales')
+await manager.remove('alerts')
+off()                                      // stop the shared event handler
+await manager.shutdown()                    // also clears every reconnect timer
+```
+
+`401` / `403` / `419` closes are treated as logged out and are never reconnected. A successful `open` resets the backoff counter. `stop()` bumps a generation counter and detaches only the manager's own listeners, so a late `close` from an old socket cannot schedule a reconnect or double-save credentials.
+
+Standalone building blocks: `makeMultiSessionManager`, `createConcurrencyLimiter`, `normalizeReconnectOptions`, and `reconnectDelay`.
+
+---
+
 ## 🔐 Pairing Code
 
 Log in without scanning a QR code:
@@ -732,6 +844,7 @@ Important event groups:
 - **Groups and communities:** `groups.upsert`, `groups.update`, `group-participants.update`, `group.join-request`, `communities.update`.
 - **Channels:** `newsletter.reaction`, `newsletter.view`, `newsletter-participants.update`, `newsletter-settings.update`.
 - **Calls and voice:** `call`, `call.offer`, `call.accept`, `call.terminate`, `voip.state`.
+- **Session recovery:** `session.recovery` fires once per recovery batch with the purged addresses, the error code, and whether fresh key bundles were fetched.
 - **Other:** `labels.edit`, `labels.association`, `blocklist.set`, `blocklist.update`, `lid-mapping.update`, `username.info`.
 
 ---
@@ -3798,7 +3911,13 @@ import {
   MessageBuilder,
   MB,
   MESSAGE_BUILDER_VERSION,
-  TTLCache
+  TTLCache,
+  createSessionManager,
+  makeMultiSessionManager,
+  createConcurrencyLimiter,
+  classifyRetryError,
+  makeSessionRecovery,
+  SESSION_RECOVERY_DEFAULTS
 } from 'zahan-baileys'
 ```
 
