@@ -1,11 +1,18 @@
 /* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 export function makeMessagesRecvSocket(config: any): {
     sendMessageAck: (node: any, errorCode: any) => Promise<void>;
-    sendRetryRequest: (node: any, forceIncludeKeys?: boolean) => Promise<void>;
+    sendRetryRequest: (node: any, forceIncludeKeys?: boolean, decryptionError?: Record<string, any>) => Promise<void>;
     rejectCall: (callId: any, callFrom: any) => Promise<void>;
     fetchMessageHistory: (count: any, oldestMsgKey: any, oldestMsgTimestamp: any) => Promise<any>;
     requestPlaceholderResend: (messageKey: any, msgData: any) => Promise<any>;
     messageRetryManager: import("../Utils/message-retry-manager.js").MessageRetryManager | null;
+    sessionRecovery: import("../Utils/session-recovery.js").SessionRecoveryManager;
+    recoverSession: (jid: string, request?: import('../Utils/session-recovery.js').SessionRecoveryRequest) => Promise<import('../Utils/session-recovery.js').SessionRecoveryResult>;
+    recoverSessions: (jids: string[], request?: import('../Utils/session-recovery.js').SessionRecoveryRequest) => Promise<{
+        results: import('../Utils/session-recovery.js').SessionRecoveryResult[];
+        summary: import('../Utils/session-recovery.js').SessionRecoveryStats;
+    }>;
+    sessionRecoveryStats: () => import('../Utils/session-recovery.js').SessionRecoveryStats;
     userDevicesCache: any;
     devicesMutex: {
         mutex(code: any): any;

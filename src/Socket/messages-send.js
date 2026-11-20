@@ -4,7 +4,7 @@ import { Boom } from '@hapi/boom';
 import { randomBytes } from 'crypto';
 import { proto } from '../../WAProto/index.js';
 import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, MAX_OUTBOUND_RESEND_ENTRIES, MEMBER_LABEL_MAX_LENGTH, WA_DEFAULT_EPHEMERAL } from '../Defaults/index.js';
-import { aggregateMessageKeysNotFromMe, assertMediaContent, assertMeId, bindWaitForEvent, decryptMediaRetryData, DEF_MEDIA_HOST, delay, encodeNewsletterMessage, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateParticipantHashV2, generateWAMessage, generateWAMessageFromContent, getPollOptionHash, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, hasValidAlbumMedia, aiLabelDecision, MessageRetryManager, shouldApplyAiLabel, normalizeMessageContent, parseAndInjectE2ESessions, prepareWAMessageMedia, shouldIncludeBizBinaryNode, unixTimestampSeconds, withAiLabel } from '../Utils/index.js';
+import { aggregateMessageKeysNotFromMe, assertMediaContent, assertMeId, bindWaitForEvent, decryptMediaRetryData, DEF_MEDIA_HOST, delay, encodeNewsletterMessage, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateParticipantHashV2, generateWAMessage, generateWAMessageFromContent, getPollOptionHash, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, hasValidAlbumMedia, aiLabelDecision, makeSessionRecovery, MessageRetryManager, shouldApplyAiLabel, normalizeMessageContent, parseAndInjectE2ESessions, prepareWAMessageMedia, shouldIncludeBizBinaryNode, unixTimestampSeconds, withAiLabel } from '../Utils/index.js';
 import { AssociationType } from '../Types/index.js';
 import { makeStatusMentionMessage } from '../Utils/modern-messages.js';
 import { commitSenderKeyDelivery, pickSenderKeyRecipients, senderKeyResetSummary } from '../Utils/sender-key-memory.js';
@@ -322,17 +322,12 @@ export const makeMessagesSocket = (config) => {
     const assertSessions = async (jids, force) => {
         let didFetchNewSession = false;
         const uniqueJids = [...new Set(jids)];
-        const jidsRequiringFetch = [];
         logger.debug({ jids }, 'assertSessions call with jids');
-        for (const jid of uniqueJids) {
-            if (!force) {
-                const sessionValidation = await signalRepository.validateSession(jid);
-                if (sessionValidation.exists) {
-                    continue;
-                }
-            }
-            jidsRequiringFetch.push(jid);
-        }
+        const validations = await Promise.all(uniqueJids.map(async jid => ({
+            jid,
+            exists: force ? false : (await signalRepository.validateSession(jid)).exists
+        })));
+        const jidsRequiringFetch = validations.filter(result => !result.exists).map(result => result.jid);
         if (jidsRequiringFetch.length) {
 
             const wireJids = [
@@ -365,6 +360,17 @@ export const makeMessagesSocket = (config) => {
         }
         return didFetchNewSession;
     };
+    const sessionRecovery = makeSessionRecovery({
+        keys: authState.keys,
+        listingKeys: config.auth?.keys ?? authState.keys,
+        signalRepository,
+        assertSessions: (jids, force) => assertSessions(jids, force),
+        messageRetryManager,
+        userDevicesCache,
+        ev,
+        logger,
+        options: config.sessionRecovery
+    });
     const sendPeerDataOperationMessage = async (pdoMessage) => {
 
         if (!authState.creds.me?.id) {
@@ -1110,6 +1116,7 @@ export const makeMessagesSocket = (config) => {
         if (messageRetryManager) {
             messageRetryManager.clear();
         }
+        sessionRecovery.close();
     });
     const sendHD = async (jid, content, options = {}) => {
         const userJid = authState.creds.me.id;
@@ -1213,6 +1220,10 @@ export const makeMessagesSocket = (config) => {
         createParticipantNodes,
         getUSyncDevices,
         messageRetryManager,
+        sessionRecovery,
+        recoverSession: (jid, options = {}) => sessionRecovery.recover(jid, options),
+        recoverSessions: (jids, options = {}) => sessionRecovery.recoverMany(jids, options),
+        sessionRecoveryStats: () => sessionRecovery.stats(),
         resetGroupSenderKey: async (jid) => {
             if (!isJidGroup(jid)) {
                 throw new Boom('resetGroupSenderKey needs a group jid', { statusCode: 400 });

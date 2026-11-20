@@ -18,6 +18,8 @@ import type { StatusSendOptions } from './Utils/status-send.js';
 import type { AnyMessageContent, CheckNumbersOptions, ContactCheckResult, DownloadMediaHelperOptions, DownloadMediaOptions, MediaDownloadType, SendMessageOptions, SendQueueStats } from './Types/Content.js';
 import type { ViewOnceRetrievalOptions } from './Utils/view-once.js';
 import type { getResourceUsage, trimMemory } from './Utils/resource-guard.js';
+import type { MultiSessionManager, MultiSessionManagerOptions } from './Utils/multi-session-manager.js';
+import type { SessionRecoveryRequest, SessionRecoveryResult, SessionRecoveryStats } from './Utils/session-recovery.js';
 type BaseWASocket = ReturnType<typeof baseMakeWASocket>;
 export type WASocket = BaseWASocket & {
     sendMessage: (jid: string | string[], content: AnyMessageContent | string, options?: SendMessageOptions) => Promise<import('../WAProto/index.js').proto.WebMessageInfo | undefined>;
@@ -60,8 +62,16 @@ export type WASocket = BaseWASocket & {
     stopViewOnceRetrieval: () => void;
     getResourceUsage: typeof getResourceUsage;
     trimMemory: typeof trimMemory;
+    recoverSession: (jid: string, request?: SessionRecoveryRequest) => Promise<SessionRecoveryResult>;
+    recoverSessions: (jids: string[], request?: SessionRecoveryRequest) => Promise<{
+        results: SessionRecoveryResult[];
+        summary: SessionRecoveryStats;
+    }>;
+    sessionRecoveryStats: () => SessionRecoveryStats;
+    sessionRecovery: import('./Utils/session-recovery.js').SessionRecoveryManager;
 };
 export declare const makeWASocket: (config: Parameters<typeof baseMakeWASocket>[0]) => WASocket;
+export declare const createSessionManager: (options?: MultiSessionManagerOptions) => MultiSessionManager;
 export default makeWASocket;
 import { AIRich as AIRichBuilder, Button as ButtonBuilder, ButtonV2 as ButtonV2Builder, Carousel as CarouselBuilder, MessageBuilder as MessageBuilderCore, Toolkit as ToolkitCore } from './MessageBuilder/index.js';
 type BuilderMembers = typeof import('./MessageBuilder/extras.js')

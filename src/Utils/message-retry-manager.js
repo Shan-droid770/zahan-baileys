@@ -29,7 +29,53 @@ export var RetryReason;
     RetryReason[RetryReason["StatusRevokeDelay"] = 13] = "StatusRevokeDelay";
 })(RetryReason || (RetryReason = {}));
 
-const MAC_ERROR_CODES = new Set([RetryReason.SignalErrorInvalidMessage, RetryReason.SignalErrorBadMac]);
+export const MAC_ERROR_CODES = Object.freeze([
+    RetryReason.SignalErrorInvalidMessage,
+    RetryReason.SignalErrorBadMac
+]);
+
+export const SESSION_RECOVERY_CODES = Object.freeze([
+    RetryReason.SignalErrorInvalidKey,
+    RetryReason.SignalErrorInvalidKeyId,
+    ...MAC_ERROR_CODES,
+    RetryReason.SignalErrorInvalidSession,
+    RetryReason.SignalErrorInvalidMsgKey
+]);
+
+const MAC_ERROR_CODES_SET = new Set(MAC_ERROR_CODES);
+const SESSION_RECOVERY_CODES_SET = new Set(SESSION_RECOVERY_CODES);
+const RETRY_REASON_NAMES = new Map(Object.entries(RetryReason)
+    .filter(([name]) => Number.isNaN(Number(name)))
+    .map(([name, value]) => [name.toLowerCase(), value]));
+
+export const parseRetryErrorCode = (errorAttr) => {
+    if (errorAttr === undefined || errorAttr === null || errorAttr === '') {
+        return undefined;
+    }
+    if (typeof errorAttr === 'number') {
+        if (!Number.isInteger(errorAttr)) {
+            return undefined;
+        }
+        return errorAttr >= RetryReason.UnknownError && errorAttr <= RetryReason.StatusRevokeDelay
+            ? errorAttr
+            : undefined;
+    }
+    const text = String(errorAttr).trim();
+    if (!text) {
+        return undefined;
+    }
+    if (/^\d+$/.test(text)) {
+        return parseRetryErrorCode(Number(text));
+    }
+    return RETRY_REASON_NAMES.get(text.toLowerCase().replace(/[^a-z0-9]/g, ''));
+};
+
+export const isMacErrorCode = (errorCode) => errorCode !== undefined && MAC_ERROR_CODES_SET.has(errorCode);
+
+export const isSessionRecoveryErrorCode = (errorCode) => errorCode !== undefined && SESSION_RECOVERY_CODES_SET.has(errorCode);
+
+const userOf = (jid) => String(jid ?? '').split('@')[0].split(':')[0];
+
 export class MessageRetryManager {
     constructor(logger, maxMsgRetryCount) {
         this.logger = logger;
@@ -75,6 +121,8 @@ export class MessageRetryManager {
             failedRetries: 0,
             mediaRetries: 0,
             sessionRecreations: 0,
+            macRecoveries: 0,
+            jidResets: 0,
             phoneRequests: 0
         };
         this.maxMsgRetryCount = Number.isInteger(maxMsgRetryCount) ? maxMsgRetryCount : DEFAULT_MAX_MSG_RETRY_COUNT;
@@ -111,17 +159,20 @@ export class MessageRetryManager {
             this.statistics.sessionRecreations++;
             return {
                 reason: "we don't have a Signal session with them",
-                recreate: true
+                recreate: true,
+                instant: false
             };
         }
 
-        if (errorCode !== undefined && MAC_ERROR_CODES.has(errorCode)) {
+        if (isSessionRecoveryErrorCode(errorCode)) {
             this.sessionRecreateHistory.set(jid, Date.now());
             this.statistics.sessionRecreations++;
-            this.logger.warn({ jid, errorCode: RetryReason[errorCode] }, 'MAC error detected, forcing immediate session recreation');
+            this.statistics.macRecoveries++;
+            this.logger.warn({ jid, errorCode: RetryReason[errorCode] }, 'MAC/session error detected, forcing immediate session recreation');
             return {
-                reason: `MAC error (code ${errorCode}: ${RetryReason[errorCode]}), immediate session recreation`,
-                recreate: true
+                reason: `MAC/session error (code ${errorCode}: ${RetryReason[errorCode]}), immediate session recreation`,
+                recreate: true,
+                instant: true
             };
         }
         const now = Date.now();
@@ -132,29 +183,19 @@ export class MessageRetryManager {
             this.statistics.sessionRecreations++;
             return {
                 reason: 'retry count > 1 and over an hour since last recreation',
-                recreate: true
+                recreate: true,
+                instant: false
             };
         }
-        return { reason: '', recreate: false };
+        return { reason: '', recreate: false, instant: false };
     }
 
     parseRetryErrorCode(errorAttr) {
-        if (errorAttr === undefined || errorAttr === '') {
-            return undefined;
-        }
-        const code = parseInt(errorAttr, 10);
-        if (Number.isNaN(code)) {
-            return undefined;
-        }
-
-        if (code >= RetryReason.UnknownError && code <= RetryReason.StatusRevokeDelay) {
-            return code;
-        }
-        return RetryReason.UnknownError;
+        return parseRetryErrorCode(errorAttr);
     }
 
     isMacError(errorCode) {
-        return errorCode !== undefined && MAC_ERROR_CODES.has(errorCode);
+        return isMacErrorCode(errorCode);
     }
 
     incrementRetryCount(messageId) {
@@ -184,6 +225,61 @@ export class MessageRetryManager {
         this.retryCounters.delete(messageId);
         this.cancelPendingPhoneRequest(messageId);
         this.removeRecentMessage(messageId);
+    }
+
+    resetRetryCounter(messageId) {
+        this.retryCounters.delete(messageId);
+        this.cancelPendingPhoneRequest(messageId);
+        for (const [key] of this.baseKeys.entries()) {
+            if (key.endsWith(`:${messageId}`)) {
+                this.baseKeys.delete(key);
+            }
+        }
+    }
+
+    resetJid(jid, { users = [], addresses = [] } = {}) {
+        const targetUsers = new Set([userOf(jid), ...users.map(userOf)].filter(Boolean));
+        if (!targetUsers.size) {
+            return 0;
+        }
+        const addressSet = new Set(addresses.map(String));
+        const messageIds = new Set();
+        let removed = 0;
+        for (const [keyStr] of this.recentMessagesMap.entries()) {
+            const separatorIndex = keyStr.lastIndexOf(MESSAGE_KEY_SEPARATOR);
+            if (separatorIndex === -1) {
+                continue;
+            }
+            const to = keyStr.slice(0, separatorIndex);
+            const messageId = keyStr.slice(separatorIndex + MESSAGE_KEY_SEPARATOR.length);
+            if (!targetUsers.has(userOf(to))) {
+                continue;
+            }
+            this.recentMessagesMap.delete(keyStr);
+            messageIds.add(messageId);
+            removed++;
+        }
+        for (const messageId of messageIds) {
+            this.messageKeyIndex.delete(messageId);
+            this.retryCounters.delete(messageId);
+            this.cancelPendingPhoneRequest(messageId);
+        }
+        for (const [key] of this.baseKeys.entries()) {
+            const separatorIndex = key.lastIndexOf(':');
+            const addr = separatorIndex === -1 ? key : key.slice(0, separatorIndex);
+            const msgId = separatorIndex === -1 ? '' : key.slice(separatorIndex + 1);
+            if (addressSet.has(addr) || messageIds.has(msgId)) {
+                this.baseKeys.delete(key);
+            }
+        }
+        for (const [key] of this.sessionRecreateHistory.entries()) {
+            if (typeof key === 'string' && targetUsers.has(userOf(key))) {
+                this.sessionRecreateHistory.delete(key);
+            }
+        }
+        this.statistics.jidResets++;
+        this.logger.debug({ jid, removed }, 'reset retry state for recovered session');
+        return removed;
     }
 
     schedulePhoneRequest(messageId, callback, delay = PHONE_REQUEST_DELAY) {
@@ -220,6 +316,8 @@ export class MessageRetryManager {
             failedRetries: 0,
             mediaRetries: 0,
             sessionRecreations: 0,
+            macRecoveries: 0,
+            jidResets: 0,
             phoneRequests: 0
         };
     }

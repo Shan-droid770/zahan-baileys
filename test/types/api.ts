@@ -7,6 +7,9 @@ import makeWASocket, {
     type SendMessageOptions,
     type SendQueueStats,
     type SessionBackupOptions,
+    type SessionRecoveryRequest,
+    classifyRetryError,
+    createSessionManager,
     exportSession,
     importSession,
     restoreSession
@@ -32,10 +35,22 @@ const checkOptions: CheckNumbersOptions = { cache: false, concurrency: 2, delayM
 const checked: Promise<ContactCheckResult[]> = socket.checkNumbers(['94770000000', '94771111111'], checkOptions);
 const cacheStats = socket.contactCheckStats();
 
+const recoveryRequest: SessionRecoveryRequest = { reason: 'SignalErrorBadMac', refreshSessions: true, purgeSenderKeys: true };
+const recovered = socket.recoverSession('94770000000:1@s.whatsapp.net', recoveryRequest);
+const recoveredMany = socket.recoverSessions(['94770000000@s.whatsapp.net'], recoveryRequest);
+const recoveryStats = socket.sessionRecoveryStats();
+const errorCode = classifyRetryError({ attrs: { error: '7' } }).code;
+
+const manager = createSessionManager({ concurrency: 3, reconnect: { maxAttempts: 5 } });
+const added = manager.add('bot-1', { auth: {} as any });
+const managerSockets = manager.list();
+const managerStats = manager.stats();
+const managerRecovery = manager.recover('bot-1', '94770000000@s.whatsapp.net', recoveryRequest);
+
 const backupOptions: SessionBackupOptions = { secret: 'a-long-enough-session-secret' };
 const authState = { creds: {} as any, keys: {} as any, saveCreds: async () => undefined };
 const exported: Promise<string> = exportSession(authState, backupOptions);
 const imported = importSession('zsess1.x', backupOptions);
 const restored = restoreSession(authState, 'zsess1.x', { ...backupOptions, replaceCreds: false });
 
-export const _unused = [sent, sentLegacy, labeled, bufferDownload, streamDownload, reupload, clearedCache, queueStats, flushing, checked, cacheStats, exported, imported, restored];
+export const _unused = [sent, sentLegacy, labeled, bufferDownload, streamDownload, reupload, clearedCache, queueStats, flushing, checked, cacheStats, exported, imported, restored, recovered, recoveredMany, recoveryStats, errorCode, added, managerSockets, managerStats, managerRecovery];

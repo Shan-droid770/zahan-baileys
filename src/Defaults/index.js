@@ -96,6 +96,17 @@ export const DEFAULT_CONNECTION_CONFIG = {
     generateHighQualityLinkPreview: true,
     enableAutoSessionRecreation: true,
     enableRecentMessageCache: true,
+    sessionRecovery: {
+        enabled: true,
+        autoRecoverMacErrors: true,
+        purgeRelatedSessions: true,
+        refreshSessions: true,
+        purgeSenderKeys: true,
+        purgeIdentityKeys: false,
+        emitEvents: true,
+        cooldownMs: 1500,
+        maxRefreshJids: 32
+    },
     viewOnceRetrieval: true,
     aiLabel: false,
     resourceGuard: true,

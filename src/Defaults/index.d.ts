@@ -71,6 +71,17 @@ export namespace DEFAULT_CONNECTION_CONFIG {
     export let generateHighQualityLinkPreview: boolean;
     export let enableAutoSessionRecreation: boolean;
     export let enableRecentMessageCache: boolean;
+    export namespace sessionRecovery {
+        let enabled: boolean;
+        let autoRecoverMacErrors: boolean;
+        let purgeRelatedSessions: boolean;
+        let refreshSessions: boolean;
+        let purgeSenderKeys: boolean;
+        let purgeIdentityKeys: boolean;
+        let emitEvents: boolean;
+        let cooldownMs: number;
+        let maxRefreshJids: number;
+    }
     export let viewOnceRetrieval: boolean | object;
     export let resourceGuard: boolean | object;
     export let options: {};

@@ -1,5 +1,10 @@
 /* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 export const RetryReason: any;
+export const MAC_ERROR_CODES: readonly number[];
+export const SESSION_RECOVERY_CODES: readonly number[];
+export declare function parseRetryErrorCode(errorAttr: unknown): number | undefined;
+export declare function isMacErrorCode(errorCode: number | undefined): boolean;
+export declare function isSessionRecoveryErrorCode(errorCode: number | undefined): boolean;
 export class MessageRetryManager {
     constructor(logger: any, maxMsgRetryCount?: number);
     logger: any;
@@ -16,60 +21,30 @@ export class MessageRetryManager {
         failedRetries: number;
         mediaRetries: number;
         sessionRecreations: number;
+        macRecoveries: number;
+        jidResets: number;
         phoneRequests: number;
     };
-    /**
-     * Add a recent message to the cache for retry handling
-     */
     addRecentMessage(to: any, id: any, message: any): void;
-    /**
-     * Get a recent message from the cache
-     */
     getRecentMessage(to: any, id: any): any;
-    /**
-     * Check if a session should be recreated based on retry count, history, and error code.
-     * MAC errors (codes 4 and 7) trigger immediate session recreation regardless of timeout.
-     */
-    shouldRecreateSession(jid: any, hasSession: any, errorCode: any): {
+    shouldRecreateSession(jid: any, hasSession: any, errorCode?: number): {
         reason: string;
         recreate: boolean;
+        instant: boolean;
     };
-    /**
-     * Parse error code from retry receipt's retry node.
-     * Returns undefined if no error code is present.
-     */
-    parseRetryErrorCode(errorAttr: any): any;
-    /**
-     * Check if an error code indicates a MAC failure
-     */
+    parseRetryErrorCode(errorAttr: any): number | undefined;
     isMacError(errorCode: any): boolean;
-    /**
-     * Increment retry counter for a message
-     */
     incrementRetryCount(messageId: any): any;
-    /**
-     * Get retry count for a message
-     */
     getRetryCount(messageId: any): any;
-    /**
-     * Check if message has exceeded maximum retry attempts
-     */
     hasExceededMaxRetries(messageId: any): boolean;
-    /**
-     * Mark retry as successful
-     */
     markRetrySuccess(messageId: any): void;
-    /**
-     * Mark retry as failed
-     */
     markRetryFailed(messageId: any): void;
-    /**
-     * Schedule a phone request with delay
-     */
+    resetRetryCounter(messageId: string): void;
+    resetJid(jid: string, options?: {
+        users?: string[];
+        addresses?: string[];
+    }): number;
     schedulePhoneRequest(messageId: any, callback: any, delay?: number): void;
-    /**
-     * Cancel pending phone request
-     */
     cancelPendingPhoneRequest(messageId: any): void;
     clear(): void;
     saveBaseKey(addr: any, msgId: any, baseKey: any): void;

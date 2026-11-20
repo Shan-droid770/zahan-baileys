@@ -5,7 +5,7 @@ import { randomBytes } from 'crypto';
 import { proto } from '../../WAProto/index.js';
 import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, DEFAULT_CONNECTION_CONFIG, KEY_BUNDLE_TYPE, MIN_PREKEY_COUNT, PLACEHOLDER_MAX_AGE_SECONDS, STATUS_EXPIRY_SECONDS } from '../Defaults/index.js';
 import { ReachoutTimelockEnforcementType, WAMessageStatus, WAMessageStubType } from '../Types/index.js';
-import { ACCOUNT_RESTRICTED_TEXT, aesDecryptCTR, aesEncryptGCM, cleanMessage, Curve, decodeMediaRetryNode, decodeMessageNode, decryptMessageNode, delay, derivePairingCodeKey, encodeBigEndian, encodeSignedDeviceIdentity, extractAddressingContext, extractE2ESessionFromRetryReceipt, getCallStatusFromNode, getHistoryMsg, getNextPreKeys, getStatusFromReceiptType, handleIdentityChange, hkdf, MISSING_KEYS_ERROR_TEXT, NACK_REASONS, NO_MESSAGE_FOUND_ERROR_TEXT, RETRYABLE_ACK_CODES, SERVER_ERROR_CODES, toNumber, unixTimestampSeconds, xmppPreKey, xmppSignedPreKey } from '../Utils/index.js';
+import { ACCOUNT_RESTRICTED_TEXT, aesDecryptCTR, aesEncryptGCM, classifyRetryError, cleanMessage, Curve, decodeMediaRetryNode, decodeMessageNode, decryptMessageNode, delay, derivePairingCodeKey, encodeBigEndian, encodeSignedDeviceIdentity, extractAddressingContext, extractE2ESessionFromRetryReceipt, getCallStatusFromNode, getHistoryMsg, getNextPreKeys, getStatusFromReceiptType, handleIdentityChange, hkdf, MISSING_KEYS_ERROR_TEXT, NACK_REASONS, NO_MESSAGE_FOUND_ERROR_TEXT, RETRYABLE_ACK_CODES, SERVER_ERROR_CODES, toNumber, unixTimestampSeconds, xmppPreKey, xmppSignedPreKey } from '../Utils/index.js';
 import { makeMutex } from '../Utils/make-mutex.js';
 import { makeOfflineNodeProcessor } from '../Utils/offline-node-processor.js';
 import { buildAckStanza } from '../Utils/stanza-ack.js';
@@ -20,7 +20,7 @@ function isValidEnforcementType(value) {
 export const makeMessagesRecvSocket = (config) => {
     const { logger, retryRequestDelayMs, maxMsgRetryCount, ackRetryDelayMs, maxAckRetryCount, getMessage, shouldIgnoreJid, enableAutoSessionRecreation } = config;
     const sock = makeMessagesSocket(config);
-    const { userDevicesCache, devicesMutex, ev, authState, ws, messageMutex, notificationMutex, receiptMutex, signalRepository, query, upsertMessage, resyncAppState, onUnexpectedError, assertSessions, sendNode, relayMessage, sendReceipt, uploadPreKeys, sendPeerDataOperationMessage, messageRetryManager, registerSocketEndHandler, issuePrivacyTokens, fetchAccountReachoutTimelock, placeholderResendCache, outboundResendCache } = sock;
+    const { userDevicesCache, devicesMutex, ev, authState, ws, messageMutex, notificationMutex, receiptMutex, signalRepository, query, upsertMessage, resyncAppState, onUnexpectedError, assertSessions, sendNode, relayMessage, sendReceipt, uploadPreKeys, sendPeerDataOperationMessage, messageRetryManager, sessionRecovery, registerSocketEndHandler, issuePrivacyTokens, fetchAccountReachoutTimelock, placeholderResendCache, outboundResendCache } = sock;
     const getLIDForPN = signalRepository.lidMapping.getLIDForPN.bind(signalRepository.lidMapping);
 
     const retryMutex = makeMutex();
@@ -34,6 +34,32 @@ export const makeMessagesRecvSocket = (config) => {
 
     const identityAssertDebounce = new TTLCache({ stdTTL: 5 });
     let sendActiveReceipts = false;
+    const userOfJid = (jid) => String(jid ?? '').split('@')[0].split(':')[0];
+    const clearRetryStateForJid = async (jid) => {
+        const target = userOfJid(jid);
+        if (!target || typeof msgRetryCache.keys !== 'function' || typeof msgRetryCache.del !== 'function') {
+            return 0;
+        }
+        const keys = msgRetryCache.keys().filter(key => {
+            if (typeof key !== 'string') {
+                return false;
+            }
+            const separator = key.indexOf(':');
+            return separator !== -1 && userOfJid(key.slice(separator + 1)) === target;
+        });
+        if (keys.length) {
+            await msgRetryCache.del(keys);
+            for (const key of keys) {
+                messageRetryManager?.resetRetryCounter?.(key.slice(0, key.indexOf(':')));
+            }
+        }
+        return keys.length;
+    };
+    const shouldAutoRecover = (classification) => !!sessionRecovery
+        && sessionRecovery.settings.autoRecoverMacErrors
+        && classification.recoverable;
+    const recoveryHandled = (result) => !!result
+        && (result.recovered === true || result.skipped === 'cooldown' || result.coalesced === true);
     const fetchMessageHistory = async (count, oldestMsgKey, oldestMsgTimestamp) => {
         if (!authState.creds.me?.id) {
             throw new Boom('Not authenticated');
@@ -407,10 +433,31 @@ export const makeMessagesRecvSocket = (config) => {
         };
         await query(stanza);
     };
-    const sendRetryRequest = async (node, forceIncludeKeys = false) => {
+    const sendRetryRequest = async (node, forceIncludeKeys = false, decryptionError = undefined) => {
         const { fullMessage } = decodeMessageNode(node, authState.creds.me.id, authState.creds.me.lid || '');
         const { key: msgKey } = fullMessage;
         const msgId = msgKey.id;
+        const fromJid = node.attrs.from;
+        const classification = classifyRetryError(decryptionError);
+        const recoveryJid = decryptionError?.jid || msgKey.participant || msgKey.participantAlt || fromJid;
+        let recoveryResult = null;
+        if (shouldAutoRecover(classification)) {
+            try {
+                recoveryResult = await sessionRecovery.recover(recoveryJid, {
+                    code: classification.code,
+                    reason: classification.reason || 'incoming-decryption-failure',
+                    groupJid: decryptionError?.groupJid,
+                    refreshSessions: false,
+                    auto: true
+                });
+                forceIncludeKeys = true;
+                messageRetryManager?.resetRetryCounter?.(msgId);
+                await clearRetryStateForJid(recoveryJid);
+            }
+            catch (error) {
+                logger.warn({ error, jid: recoveryJid }, 'failed to recover session after bad MAC');
+            }
+        }
         if (messageRetryManager) {
 
             if (messageRetryManager.hasExceededMaxRetries(msgId)) {
@@ -439,16 +486,15 @@ export const makeMessagesRecvSocket = (config) => {
         const key = `${msgId}:${msgKey?.participant}`;
         const retryCount = (await msgRetryCache.get(key)) || 1;
         const { account, signedPreKey, signedIdentityKey: identityKey } = authState.creds;
-        const fromJid = node.attrs.from;
 
-        let shouldRecreateSession = false;
-        let recreateReason = '';
-        if (enableAutoSessionRecreation && messageRetryManager && retryCount > 1) {
+        let shouldRecreateSession = !!recoveryResult?.recovered;
+        let recreateReason = recoveryResult?.reason ?? '';
+        if (!recoveryHandled(recoveryResult) && enableAutoSessionRecreation && messageRetryManager && (retryCount > 1 || classification.recoverable)) {
             try {
 
                 const sessionId = signalRepository.jidToSignalProtocolAddress(fromJid);
                 const hasSession = await signalRepository.validateSession(fromJid);
-                const result = messageRetryManager.shouldRecreateSession(fromJid, hasSession.exists);
+                const result = messageRetryManager.shouldRecreateSession(fromJid, hasSession.exists, classification.code);
                 shouldRecreateSession = result.recreate;
                 recreateReason = result.reason;
                 if (shouldRecreateSession) {
@@ -1047,7 +1093,7 @@ export const makeMessagesRecvSocket = (config) => {
         const newValue = ((await msgRetryCache.get(key)) || 0) + 1;
         await msgRetryCache.set(key, newValue);
     };
-    const sendMessagesAgain = async (key, ids, retryNode, receiptNode) => {
+    const sendMessagesAgain = async (key, ids, retryNode, receiptNode, recoveryResult = null) => {
         const remoteJid = key.remoteJid;
         const participant = key.participant || remoteJid;
         const retryCount = +retryNode.attrs.count || 1;
@@ -1120,12 +1166,13 @@ export const makeMessagesRecvSocket = (config) => {
                 }
             }
         }
-        let shouldRecreateSession = false;
-        let recreateReason = '';
-        if (enableAutoSessionRecreation && messageRetryManager && retryCount > 1 && !injectedFromBundle) {
+        let shouldRecreateSession = !!recoveryResult?.recovered;
+        let recreateReason = recoveryResult?.reason ?? '';
+        const errorInfo = classifyRetryError(retryNode?.attrs?.error);
+        if (!recoveryHandled(recoveryResult) && enableAutoSessionRecreation && messageRetryManager && (retryCount > 1 || errorInfo.recoverable) && !injectedFromBundle) {
             try {
                 const hasSession = await signalRepository.validateSession(participant);
-                const result = messageRetryManager.shouldRecreateSession(participant, hasSession.exists);
+                const result = messageRetryManager.shouldRecreateSession(participant, hasSession.exists, errorInfo.code);
                 shouldRecreateSession = result.recreate;
                 recreateReason = result.reason;
                 if (shouldRecreateSession) {
@@ -1137,10 +1184,10 @@ export const makeMessagesRecvSocket = (config) => {
                 logger.warn({ error, participant }, 'failed to check session recreation for outgoing retry');
             }
         }
-        if (!injectedFromBundle) {
+        if (!injectedFromBundle && !recoveryResult?.refreshed) {
             await assertSessions([participant], true);
         }
-        if (isJidGroup(remoteJid)) {
+        if (isJidGroup(remoteJid) && !recoveryResult?.purged?.senderKeyMemory?.includes(remoteJid)) {
             await authState.keys.set({ 'sender-key-memory': { [remoteJid]: null } });
         }
         logger.debug({ participant, sendToAll, shouldRecreateSession, recreateReason, injectedFromBundle }, 'prepared session for retry resend');
@@ -1213,12 +1260,33 @@ export const makeMessagesRecvSocket = (config) => {
 
                         key.participant = key.participant || attrs.from;
                         const retryNode = getBinaryNodeChild(node, 'retry');
+                        const errorInfo = classifyRetryError(retryNode?.attrs?.error ?? attrs.error);
+                        let recoveryResult = null;
+                        if (key.fromMe && shouldAutoRecover(errorInfo)) {
+                            const bundle = extractE2ESessionFromRetryReceipt(node);
+                            try {
+                                recoveryResult = await sessionRecovery.recover(key.participant, {
+                                    code: errorInfo.code,
+                                    reason: errorInfo.reason || 'retry-receipt',
+                                    groupJid: isJidGroup(remoteJid) ? remoteJid : undefined,
+                                    refreshSessions: !bundle,
+                                    auto: true
+                                });
+                                for (const id of ids) {
+                                    messageRetryManager?.resetRetryCounter?.(id);
+                                }
+                                await clearRetryStateForJid(key.participant);
+                            }
+                            catch (error) {
+                                logger.warn({ error, jid: key.participant }, 'failed to recover session from retry receipt');
+                            }
+                        }
                         if (ids[0] && key.participant && (await willSendMessageAgain(ids[0], key.participant))) {
                             if (key.fromMe) {
                                 try {
                                     await updateSendMessageAgainCount(ids[0], key.participant);
                                     logger.debug({ attrs, key }, 'recv retry request');
-                                    await sendMessagesAgain(key, ids, retryNode, node);
+                                    await sendMessagesAgain(key, ids, retryNode, node, recoveryResult);
                                 }
                                 catch (error) {
                                     logger.error({ key, ids, trace: error instanceof Error ? error.stack : 'Unknown error' }, 'error in sending message again');
@@ -1386,7 +1454,11 @@ export const makeMessagesRecvSocket = (config) => {
                                         return;
                                     }
                                     const encNode = getBinaryNodeChild(node, 'enc');
-                                    await sendRetryRequest(node, !encNode);
+                                    await sendRetryRequest(node, !encNode, {
+                                        stubParameters: msg.messageStubParameters,
+                                        jid: msg.key.participant || msg.key.participantAlt || node.attrs.participant || node.attrs.from,
+                                        groupJid: isJidGroup(msg.key.remoteJid) ? msg.key.remoteJid : undefined
+                                    });
                                     if (retryRequestDelayMs) {
                                         await delay(retryRequestDelayMs);
                                     }
