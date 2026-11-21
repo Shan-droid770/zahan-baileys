@@ -665,7 +665,7 @@ Lower-level helpers are exported too: `classifyRetryError`, `isMacErrorText`, `n
 
 ### Running many accounts in one process
 
-`createSessionManager` keeps each account's auth state, retry manager and caches isolated, while sharing one bounded connect queue, one event-fanout registration, serialised credential saves and one exponential-backoff reconnect policy:
+`createSessionManager` keeps each account's auth state, retry manager and per-account device cache isolated, while sharing one bounded connect queue, one event-fanout registration, one coalesced group-metadata cache, serialised credential saves and one exponential-backoff reconnect policy. The shared group cache is enabled by default: a command or group send in any session fetches metadata once, other sessions reuse it, stale entries are returned immediately while refreshed in the background, and `groups.update` / `group-participants.update` invalidate the affected JID. Set `groupMetadataCache: false` to opt out, or tune it with `{ ttlMs, staleMs, maxEntries }`.
 
 ```js
 import { createSessionManager, useMultiFileAuthState } from 'zahan-baileys'
@@ -673,6 +673,7 @@ import { createSessionManager, useMultiFileAuthState } from 'zahan-baileys'
 const manager = createSessionManager({
   concurrency: 4,                    // at most 4 sockets connecting at once
   autoSaveCreds: true,               // serialises saveCreds per account
+  groupMetadataCache: { ttlMs: 30_000, staleMs: 300_000, maxEntries: 1000 },
   reconnect: {
     maxAttempts: 10,
     baseDelayMs: 1000,
@@ -695,7 +696,9 @@ for (const id of ['sales', 'support', 'alerts']) {
 }
 
 console.log(manager.stats())
+console.log(manager.stats().groupMetadataCache) // hits, misses, stale hits, entries
 console.log(manager.list())                 // per-account state, attempts, user, socket
+manager.invalidateGroupMetadata('120363...@g.us') // force a fresh lookup after a manual change
 await manager.recoverAll(['94770000000@s.whatsapp.net'])
 await manager.restart('sales')
 await manager.remove('alerts')
@@ -705,7 +708,7 @@ await manager.shutdown()                    // also clears every reconnect timer
 
 `401` / `403` / `419` closes are treated as logged out and are never reconnected. A successful `open` resets the backoff counter. `stop()` bumps a generation counter and detaches only the manager's own listeners, so a late `close` from an old socket cannot schedule a reconnect or double-save credentials.
 
-Standalone building blocks: `makeMultiSessionManager`, `createConcurrencyLimiter`, `normalizeReconnectOptions`, and `reconnectDelay`.
+Standalone building blocks: `makeMultiSessionManager`, `createConcurrencyLimiter`, `createSharedGroupMetadataCache`, `normalizeReconnectOptions`, and `reconnectDelay`.
 
 ---
 
@@ -3915,6 +3918,7 @@ import {
   createSessionManager,
   makeMultiSessionManager,
   createConcurrencyLimiter,
+  createSharedGroupMetadataCache,
   classifyRetryError,
   makeSessionRecovery,
   SESSION_RECOVERY_DEFAULTS

@@ -1,5 +1,6 @@
 /* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
 import { DisconnectReason } from '../Types/index.js';
+import { createSharedGroupMetadataCache, isUsableGroupMetadata } from './group-metadata-cache.js';
 
 export const MULTI_SESSION_DEFAULTS = Object.freeze({
     concurrency: 4,
@@ -146,6 +147,14 @@ export const makeMultiSessionManager = (options = {}) => {
     const autoSaveCreds = options.autoSaveCreds !== false;
     const limiter = createConcurrencyLimiter(concurrency);
     const recoveryLimiter = createConcurrencyLimiter(concurrency);
+    const groupCacheOptions = options.groupMetadataCache === false
+        ? null
+        : (options.groupMetadataCache && typeof options.groupMetadataCache === 'object'
+            ? options.groupMetadataCache
+            : {});
+    const groupMetadataCache = groupCacheOptions
+        ? createSharedGroupMetadataCache({ ...groupCacheOptions, now })
+        : null;
     const sessions = new Map();
     const subscriptions = new Set();
     const counters = {
@@ -168,6 +177,32 @@ export const makeMultiSessionManager = (options = {}) => {
             hooks.onError?.(id, error, phase);
         }
         catch {
+        }
+    };
+
+    const invalidateGroupJid = (jid) => {
+        if (!groupMetadataCache || typeof jid !== 'string' || !jid) {
+            return false;
+        }
+        return groupMetadataCache.invalidate(jid);
+    };
+
+    const applyGroupCacheUpdate = (payload) => {
+        if (!groupMetadataCache) {
+            return;
+        }
+        const updates = Array.isArray(payload) ? payload : [payload];
+        for (const update of updates) {
+            const jid = update?.id;
+            if (typeof jid !== 'string' || !jid) {
+                continue;
+            }
+            if (isUsableGroupMetadata(update)) {
+                groupMetadataCache.set(jid, update);
+            }
+            else {
+                groupMetadataCache.invalidate(jid);
+            }
         }
     };
 
@@ -304,6 +339,12 @@ export const makeMultiSessionManager = (options = {}) => {
             catch {
             }
         });
+        if (groupMetadataCache) {
+            listen('groups.upsert', applyGroupCacheUpdate);
+            listen('groups.update', applyGroupCacheUpdate);
+            listen('group-participants.update', (payload) => invalidateGroupJid(payload?.id));
+            listen('group.join-request', (payload) => invalidateGroupJid(payload?.id));
+        }
         for (const subscription of subscriptions) {
             listen(subscription.event, subscriptionListener(entry, subscription, generation));
         }
@@ -349,13 +390,61 @@ export const makeMultiSessionManager = (options = {}) => {
             const sessionLogger = entry.config.logger
                 ?? defaults.logger
                 ?? (typeof log.child === 'function' ? log.child({ session: id }) : log);
-            const config = { ...defaults, ...entry.config, logger: sessionLogger };
-            if (config.sessionRecovery === undefined) {
-                config.sessionRecovery = { autoRecoverMacErrors: true };
+            const sessionConfig = { ...defaults, ...entry.config, logger: sessionLogger };
+            if (sessionConfig.sessionRecovery === undefined) {
+                sessionConfig.sessionRecovery = { autoRecoverMacErrors: true };
             }
-            const sock = await makeSocket(config);
+            const userCachedGroupMetadata = typeof sessionConfig.cachedGroupMetadata === 'function'
+                ? sessionConfig.cachedGroupMetadata
+                : undefined;
+            const rawGroupMetadata = { current: undefined };
+            if (groupMetadataCache) {
+                sessionConfig.cachedGroupMetadata = async (jid) => {
+                    if (userCachedGroupMetadata) {
+                        try {
+                            const userCached = await userCachedGroupMetadata(jid);
+                            if (isUsableGroupMetadata(userCached)) {
+                                groupMetadataCache.set(jid, userCached);
+                                return userCached;
+                            }
+                        }
+                        catch (error) {
+                            reportError(id, error, 'cachedGroupMetadata');
+                        }
+                    }
+                    if (!rawGroupMetadata.current) {
+                        return undefined;
+                    }
+                    const fetchMetadata = () => rawGroupMetadata.current(jid);
+                    const cached = await groupMetadataCache.get(jid, fetchMetadata);
+                    if (isUsableGroupMetadata(cached)) {
+                        return cached;
+                    }
+                    return fetchMetadata();
+                };
+            }
+            const sock = await makeSocket(sessionConfig);
             if (!sock || typeof sock.ev?.on !== 'function') {
                 throw new TypeError(`makeSocket did not return a socket for session "${id}"`);
+            }
+            rawGroupMetadata.current = typeof sock.groupMetadata === 'function'
+                ? sock.groupMetadata.bind(sock)
+                : undefined;
+            if (groupMetadataCache && rawGroupMetadata.current) {
+                const raw = rawGroupMetadata.current;
+                try {
+                    Object.defineProperty(sock, 'groupMetadata', {
+                        value: async (jid) => {
+                            const cached = await groupMetadataCache.get(jid, () => raw(jid));
+                            return isUsableGroupMetadata(cached) ? cached : raw(jid);
+                        },
+                        configurable: true,
+                        writable: true
+                    });
+                }
+                catch (error) {
+                    reportError(id, error, 'groupMetadataCache');
+                }
             }
             if (shuttingDown || entry.generation !== generation || !entry.active) {
                 await sock.end?.(new Error('session stopped before connection')).catch(() => undefined);
@@ -365,7 +454,7 @@ export const makeMultiSessionManager = (options = {}) => {
             entry.state = 'connecting';
             entry.startedAt = now();
             counters.started++;
-            attach(entry, sock, config, generation);
+            attach(entry, sock, sessionConfig, generation);
             return sock;
         });
         entry.startPromise = pendingStart;
@@ -532,6 +621,7 @@ export const makeMultiSessionManager = (options = {}) => {
     const shutdown = async () => {
         shuttingDown = true;
         await Promise.all([...sessions.keys()].map(id => stop(id)));
+        groupMetadataCache?.clear();
     };
 
     const stats = () => {
@@ -550,7 +640,8 @@ export const makeMultiSessionManager = (options = {}) => {
             byState,
             shuttingDown,
             limiter: { active: limiter.active, pending: limiter.pending, limit: limiter.limit },
-            reconnect: { ...reconnectSettings }
+            reconnect: { ...reconnectSettings },
+            groupMetadataCache: groupMetadataCache?.stats() ?? null
         };
     };
 
@@ -569,6 +660,7 @@ export const makeMultiSessionManager = (options = {}) => {
         on,
         recover,
         recoverAll,
+        invalidateGroupMetadata: (jid) => invalidateGroupJid(jid),
         stats,
         shutdown
     };
