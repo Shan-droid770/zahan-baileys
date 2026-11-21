@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { extractGroupMetadata } from '../src/Socket/groups.js';
-import { describeUnusableGroupMetadata, isUsableGroupMetadata } from '../src/Utils/group-metadata-cache.js';
+import { createSharedGroupMetadataCache, describeUnusableGroupMetadata, isUsableGroupMetadata } from '../src/Utils/group-metadata-cache.js';
 import { toNewsletterUserSettingInput, toNewsletterServerIds } from '../src/Socket/newsletter.js';
 import { QueryIds, XWAPaths } from '../src/Types/index.js';
 import { EventEmitter } from 'node:events';
@@ -131,6 +131,86 @@ test('group-metadata-cache', async () => {
     {
         assert.equal(isUsableGroupMetadata({ participants: [], addressingMode: 'pn' }), true);
     }
+});
+
+test('shared group metadata cache coalesces concurrent misses', async () => {
+    let calls = 0;
+    const cache = createSharedGroupMetadataCache({ ttlMs: 1000, staleMs: 1000, now: () => 0 });
+    const metadata = { participants: [{ id: '1@s.whatsapp.net' }], addressingMode: 'pn' };
+    const fetcher = async () => {
+        calls++;
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return { ...metadata };
+    };
+    const results = await Promise.all([
+        cache.get('120363@g.us', fetcher),
+        cache.get('120363@g.us', fetcher),
+        cache.get('120363@g.us', fetcher)
+    ]);
+    assert.equal(calls, 1);
+    assert.deepEqual(results[0], results[1]);
+    assert.equal(results[2].addressingMode, 'pn');
+    assert.equal(cache.stats().misses, 3);
+    assert.equal(cache.stats().loads, 1);
+    await cache.get('120363@g.us', fetcher);
+    assert.equal(calls, 1);
+    assert.equal(cache.stats().hits, 1);
+});
+
+test('shared group metadata cache serves stale entries while refreshing', async () => {
+    let now = 0;
+    let calls = 0;
+    const cache = createSharedGroupMetadataCache({ ttlMs: 100, staleMs: 500, now: () => now });
+    const fetcher = async () => {
+        calls++;
+        return { participants: [{ id: `${calls}@s.whatsapp.net` }], addressingMode: 'pn' };
+    };
+    await cache.get('120363@g.us', fetcher);
+    assert.equal(calls, 1);
+    now = 150;
+    const stale = await cache.get('120363@g.us', fetcher);
+    assert.equal(stale.participants[0].id, '1@s.whatsapp.net');
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(calls, 2);
+    assert.equal(cache.stats().staleHits, 1);
+    assert.equal(cache.stats().refreshes, 1);
+    assert.equal(cache.stats().loads, 2);
+    const fresh = await cache.get('120363@g.us', fetcher);
+    assert.equal(fresh.participants[0].id, '2@s.whatsapp.net');
+    assert.equal(calls, 2);
+});
+
+test('shared group metadata cache falls back to another session fetcher', async () => {
+    const cache = createSharedGroupMetadataCache({ ttlMs: 1000, staleMs: 0, now: () => 0 });
+    const metadata = { participants: [], addressingMode: 'pn' };
+    const failing = async () => {
+        throw new Error('not in group');
+    };
+    const working = async () => metadata;
+    const [first, second] = await Promise.all([
+        cache.get('120363@g.us', failing),
+        cache.get('120363@g.us', working)
+    ]);
+    assert.deepEqual(first, metadata);
+    assert.deepEqual(second, metadata);
+    assert.equal(cache.stats().failures, 1);
+});
+
+test('shared group metadata cache invalidates and evicts entries', async () => {
+    const cache = createSharedGroupMetadataCache({ ttlMs: 1000, staleMs: 0, maxEntries: 2, now: () => 0 });
+    const metadata = id => ({ id, participants: [], addressingMode: 'pn' });
+    assert.equal(cache.set('a@g.us', metadata('a@g.us')), true);
+    assert.equal(cache.set('b@g.us', { participants: [] }), false);
+    assert.equal(cache.set('b@g.us', metadata('b@g.us')), true);
+    assert.equal(cache.set('c@g.us', metadata('c@g.us')), true);
+    assert.equal(cache.stats().entries, 2);
+    assert.equal(cache.peek('a@g.us'), undefined);
+    assert.equal(cache.invalidate('b@g.us'), true);
+    assert.equal(cache.peek('b@g.us'), undefined);
+    assert.equal(cache.stats().invalidations, 1);
+    cache.clear();
+    assert.equal(cache.stats().entries, 0);
 });
 
 test('newsletter-mute', async () => {

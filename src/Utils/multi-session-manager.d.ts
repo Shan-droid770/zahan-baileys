@@ -1,4 +1,5 @@
 /* Zahan Baileys maintained distribution. Upstream notices and license are preserved in LICENSE and NOTICE.md. */
+import type { SharedGroupMetadataCacheStats } from './group-metadata-cache.js';
 export interface MultiSessionReconnectOptions {
     enabled: boolean;
     maxAttempts: number;
@@ -7,11 +8,18 @@ export interface MultiSessionReconnectOptions {
     jitter: number;
 }
 
+export interface MultiSessionGroupMetadataCacheOptions {
+    ttlMs?: number;
+    staleMs?: number;
+    maxEntries?: number;
+}
+
 export interface MultiSessionManagerOptions {
     makeSocket?: (config: any) => any | Promise<any>;
     defaults?: Record<string, any>;
     logger?: any;
     concurrency?: number;
+    groupMetadataCache?: boolean | MultiSessionGroupMetadataCacheOptions;
     autoSaveCreds?: boolean;
     reconnect?: boolean | Partial<MultiSessionReconnectOptions> & {
         maxReconnectAttempts?: number;
@@ -67,6 +75,7 @@ export interface MultiSessionStats {
         limit: number;
     };
     reconnect: MultiSessionReconnectOptions;
+    groupMetadataCache: SharedGroupMetadataCacheStats | null;
 }
 
 export interface MultiSessionManager {
@@ -85,6 +94,7 @@ export interface MultiSessionManager {
         results: any[];
         error?: string;
     }>>;
+    invalidateGroupMetadata(jid: string): boolean;
     stats(): MultiSessionStats;
     shutdown(): Promise<void>;
 }

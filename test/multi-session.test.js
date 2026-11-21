@@ -214,3 +214,65 @@ test('a second start while one is in flight returns the same socket', async () =
     assert.equal(b === undefined || b === a, true);
     await manager.shutdown();
 });
+
+test('group metadata is shared across sessions and invalidated by group events', async () => {
+    const sockets = [];
+    const configs = [];
+    let rawCalls = 0;
+    const metadata = jid => ({
+        id: jid,
+        participants: [{ id: '1@s.whatsapp.net' }],
+        addressingMode: 'pn'
+    });
+    const factory = async (config) => {
+        configs.push(config);
+        const sock = new FakeSocket(config.sessionId, sockets);
+        sock.groupMetadata = async (jid) => {
+            rawCalls++;
+            await new Promise(resolve => setTimeout(resolve, 5));
+            return metadata(jid);
+        };
+        return sock;
+    };
+    const { manager } = makeManager({
+        makeSocket: factory,
+        groupMetadataCache: { ttlMs: 1000, staleMs: 1000 }
+    });
+    const [first, second] = await Promise.all(['one', 'two'].map(id => manager.add(id, { sessionId: id })));
+    assert.equal(typeof configs[0].cachedGroupMetadata, 'function');
+    assert.equal(typeof configs[1].cachedGroupMetadata, 'function');
+    const jid = '120363@g.us';
+    const [fromConfigA, fromConfigB, fromSocket] = await Promise.all([
+        configs[0].cachedGroupMetadata(jid),
+        configs[1].cachedGroupMetadata(jid),
+        first.groupMetadata(jid)
+    ]);
+    assert.equal(rawCalls, 1);
+    assert.deepEqual(fromConfigA.participants, fromConfigB.participants);
+    assert.equal(fromSocket.addressingMode, 'pn');
+    assert.equal(manager.stats().groupMetadataCache.loads, 1);
+    first.emit('groups.update', [{ id: jid, subject: 'changed' }]);
+    assert.equal(manager.stats().groupMetadataCache.entries, 0);
+    await configs[0].cachedGroupMetadata(jid);
+    assert.equal(rawCalls, 2);
+    assert.equal(manager.stats().groupMetadataCache.loads, 2);
+    assert.equal(manager.invalidateGroupMetadata(jid), true);
+    assert.equal(manager.stats().groupMetadataCache.entries, 0);
+    await manager.shutdown();
+    assert.equal(manager.stats().groupMetadataCache.entries, 0);
+    assert.equal(second.ev.listenerCount('groups.update'), 0);
+});
+
+test('shared group metadata cache can be disabled', async () => {
+    const configs = [];
+    const factory = async (config) => {
+        configs.push(config);
+        return new FakeSocket(config.sessionId, []);
+    };
+    const { manager } = makeManager({ makeSocket: factory, groupMetadataCache: false });
+    await manager.add('solo', { sessionId: 'solo' });
+    assert.equal(configs[0].cachedGroupMetadata, undefined);
+    assert.equal(manager.stats().groupMetadataCache, null);
+    assert.equal(manager.invalidateGroupMetadata('120363@g.us'), false);
+    await manager.shutdown();
+});
