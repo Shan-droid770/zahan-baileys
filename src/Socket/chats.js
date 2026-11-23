@@ -6,6 +6,7 @@ import { DEFAULT_CACHE_LIMITS, DEFAULT_CACHE_TTLS, HISTORY_SYNC_PAUSED_TIMEOUT_M
 import { ALL_WA_PATCH_NAMES, SPAM_FLOWS } from '../Types/index.js';
 import { SyncState } from '../Types/State.js';
 import { chatModificationToAppPatch, decodePatches, decodeSyncdSnapshot, encodeSyncdPatch, ensureLTHashStateVersion, extractSyncdPatches, generateProfilePicture, getHistoryMsg, isAppStateSyncIrrecoverable, isMissingKeyError, MAX_SYNC_ATTEMPTS, newLTHashState, processSyncAction } from '../Utils/index.js';
+import { hydrateQuotedViewOnce, isViewOnceMessage, needsQuotedViewOnceHydration } from '../Utils/view-once.js';
 import { makeMutex } from '../Utils/make-mutex.js';
 import processMessage from '../Utils/process-message.js';
 import { buildTcTokenFromJid } from '../Utils/tc-token-utils.js';
@@ -1147,6 +1148,16 @@ export const makeChatsSocket = (config) => {
         await Promise.all([fetchProps(), fetchBlocklist(), fetchPrivacySettings()]);
     };
     const upsertMessage = ev.createBufferedFunction(async (msg, type) => {
+        if (config.viewOnceStore && msg?.message && msg?.key?.remoteJid && msg.key.remoteJid !== 'status@broadcast' && isViewOnceMessage(msg.message)) {
+            config.viewOnceStore.remember(msg);
+        }
+        if (msg?.message && needsQuotedViewOnceHydration(msg, config.viewOnceStore)) {
+            await hydrateQuotedViewOnce(msg, {
+                store: config.viewOnceStore,
+                getMessage,
+                logger
+            });
+        }
         ev.emit('messages.upsert', { messages: [msg], type });
         if (!!msg.pushName) {
             let jid = msg.key.fromMe ? authState.creds.me.id : msg.key.participant || msg.key.remoteJid;

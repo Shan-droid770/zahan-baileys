@@ -2,21 +2,93 @@
 import { Boom } from '@hapi/boom';
 import { jidNormalizedUser } from '../WABinary/index.js';
 import { downloadMediaMessage, normalizeMessageContent } from './messages.js';
+import { getUrlFromDirectPath } from './messages-media.js';
 import { TTLCache } from './ttl-cache.js';
 
 export const VIEW_ONCE_WRAPPER_KEYS = Object.freeze(['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension']);
 export const VIEW_ONCE_MEDIA_KEYS = Object.freeze({
     imageMessage: 'image',
     videoMessage: 'video',
-    audioMessage: 'audio'
+    audioMessage: 'audio',
+    ptvMessage: 'video',
+    instantImageMessage: 'image'
 });
 export const DEFAULT_VIEW_ONCE_MAX_BYTES = 64 * 1024 * 1024;
 export const DEFAULT_VIEW_ONCE_TRIGGER_EMOJIS = Object.freeze(['🔓', '📥']);
 export const DEFAULT_VIEW_ONCE_CACHE_SIZE = 256;
 export const DEFAULT_VIEW_ONCE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const TRANSPARENT_WRAPPERS = ['ephemeralMessage', 'editedMessage', 'documentWithCaptionMessage', 'associatedChildMessage', 'botForwardedMessage'];
+const TRANSPARENT_WRAPPERS = [
+    'ephemeralMessage',
+    'editedMessage',
+    'documentWithCaptionMessage',
+    'associatedChildMessage',
+    'botForwardedMessage',
+    'spoilerMessage',
+    'groupMentionedMessage',
+    'limitSharingMessage',
+    'botInvokeMessage',
+    'lottieStickerMessage',
+    'groupStatusMessage',
+    'groupStatusMessageV2',
+    'groupStatusMentionMessage',
+    'statusMentionMessage',
+    'deviceSentMessage'
+];
 const WRAPPER_KEYS = [...VIEW_ONCE_WRAPPER_KEYS, ...TRANSPARENT_WRAPPERS];
+const MEDIA_CRITICAL_FIELDS = new Set([
+    'url',
+    'directPath',
+    'mediaKey',
+    'fileSha256',
+    'fileEncSha256',
+    'fileLength',
+    'mediaKeyTimestamp',
+    'viewOnce'
+]);
+
+const isEmptyBinary = (value) => {
+    if (value === undefined || value === null || value === '') {
+        return true;
+    }
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+        return value.byteLength === 0;
+    }
+    if (Array.isArray(value)) {
+        return value.length === 0;
+    }
+    if (typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
+        return value.data.length === 0;
+    }
+    return false;
+};
+
+const hasUsableMediaKey = (mediaKey) => {
+    if (!mediaKey) {
+        return false;
+    }
+    if (typeof mediaKey === 'string') {
+        return mediaKey.trim().length > 0;
+    }
+    if (ArrayBuffer.isView(mediaKey) || mediaKey instanceof ArrayBuffer) {
+        return mediaKey.byteLength > 0;
+    }
+    if (Array.isArray(mediaKey)) {
+        return mediaKey.length > 0;
+    }
+    if (typeof mediaKey === 'object') {
+        if (mediaKey.type === 'Buffer' && Array.isArray(mediaKey.data)) {
+            return mediaKey.data.length > 0;
+        }
+        return Object.keys(mediaKey).some(key => /^\d+$/.test(key));
+    }
+    return false;
+};
+
+const hasMediaLocation = (media) => Boolean(
+    (typeof media?.url === 'string' && media.url.length > 0) ||
+    (typeof media?.directPath === 'string' && media.directPath.length > 0)
+);
 
 const findWrappedMessage = (message, keys = WRAPPER_KEYS) => {
     if (!message || typeof message !== 'object') {
@@ -31,22 +103,25 @@ const findWrappedMessage = (message, keys = WRAPPER_KEYS) => {
     return undefined;
 };
 
-const hasViewOnceFlag = (message) => {
-    if (!message || typeof message !== 'object') {
-        return false;
+const extractViewOnceMedia = (content) => {
+    if (!content || typeof content !== 'object') {
+        return undefined;
     }
-    for (const key of Object.keys(VIEW_ONCE_MEDIA_KEYS)) {
-        if (message[key]?.viewOnce) {
-            return true;
+    for (const [key, type] of Object.entries(VIEW_ONCE_MEDIA_KEYS)) {
+        const media = content[key];
+        if (media && typeof media === 'object') {
+            return { key, type, media };
         }
     }
-    return false;
+    return undefined;
 };
+
+const hasViewOnceFlag = (message) => Boolean(extractViewOnceMedia(message)?.media?.viewOnce);
 
 export const unwrapViewOnce = (message) => {
     let current = message;
     let wrapped = false;
-    for (let depth = 0; depth < 6; depth++) {
+    for (let depth = 0; depth < 8; depth++) {
         const inner = findWrappedMessage(current);
         if (!inner) {
             break;
@@ -64,30 +139,24 @@ export const unwrapViewOnce = (message) => {
 
 export const isViewOnceMessage = (message) => !!unwrapViewOnce(message);
 
-const mediaTypeOfContent = (content) => {
-    if (!content || typeof content !== 'object') {
-        return undefined;
-    }
-    for (const [key, type] of Object.entries(VIEW_ONCE_MEDIA_KEYS)) {
-        if (content[key]) {
-            return type;
-        }
-    }
-    return undefined;
+export const hasDownloadableViewOnceMedia = (message) => {
+    const content = unwrapViewOnce(message?.message ?? message);
+    const info = extractViewOnceMedia(content);
+    return Boolean(info && hasUsableMediaKey(info.media.mediaKey) && hasMediaLocation(info.media));
 };
 
 export const getViewOnceMediaType = (message) => {
     const content = unwrapViewOnce(message);
-    return content ? mediaTypeOfContent(content) : undefined;
+    return extractViewOnceMedia(content)?.type;
 };
 
 export const describeViewOnce = (message) => {
     const content = unwrapViewOnce(message);
-    const type = getViewOnceMediaType(message);
-    if (!content || !type) {
+    const info = extractViewOnceMedia(content);
+    if (!content || !info) {
         return undefined;
     }
-    const media = content[`${type}Message`];
+    const { type, media } = info;
     return {
         type,
         mimetype: media.mimetype,
@@ -101,40 +170,572 @@ export const describeViewOnce = (message) => {
     };
 };
 
+const collectQuoteContexts = (message) => {
+    const contexts = [];
+    const seen = new Set();
+    const visitContainer = (container) => {
+        if (!container || typeof container !== 'object') {
+            return;
+        }
+        for (const value of Object.values(container)) {
+            if (value && typeof value === 'object' && value.contextInfo && typeof value.contextInfo === 'object') {
+                const ctx = value.contextInfo;
+                if ((ctx.quotedMessage || ctx.stanzaId || ctx.quotedMessageId) && !seen.has(ctx)) {
+                    seen.add(ctx);
+                    contexts.push(ctx);
+                }
+            }
+        }
+    };
+    let current = message?.message ?? message;
+    for (let depth = 0; depth < 8 && current && typeof current === 'object'; depth++) {
+        visitContainer(current);
+        const edited = current.protocolMessage?.editedMessage;
+        if (edited && typeof edited === 'object') {
+            visitContainer(edited);
+        }
+        const inner = findWrappedMessage(current);
+        if (!inner) {
+            break;
+        }
+        current = inner.message;
+    }
+    return contexts;
+};
+
 const contextInfoOf = (content) => {
     for (const value of Object.values(content ?? {})) {
-        if (value && typeof value === 'object' && value.contextInfo?.quotedMessage) {
+        if (value && typeof value === 'object' && (value.contextInfo?.quotedMessage || value.contextInfo?.stanzaId)) {
             return value.contextInfo;
         }
     }
     return undefined;
 };
 
+const isSharedChatJid = (jid) => typeof jid === 'string' && (jid.endsWith('@g.us') || jid.endsWith('@community') || jid.endsWith('@newsletter'));
+
 const storeKey = (jid, id) => `${jidNormalizedUser(jid)}:${id}`;
 
 export const makeViewOnceStore = ({ max = DEFAULT_VIEW_ONCE_CACHE_SIZE, ttlMs = DEFAULT_VIEW_ONCE_TTL_MS } = {}) => {
     const cache = new TTLCache({ ttl: ttlMs, maxKeys: max });
+    const altKeys = new Map();
+    const byId = new Map();
+
+    const pruneStaleIndexes = () => {
+        if (byId.size <= max * 2 && altKeys.size <= max * 2) {
+            return;
+        }
+        for (const [id, keys] of byId.entries()) {
+            for (const pk of keys) {
+                if (!cache.get(pk)) {
+                    keys.delete(pk);
+                }
+            }
+            if (!keys.size) {
+                byId.delete(id);
+            }
+        }
+        for (const [altKey, pk] of altKeys.entries()) {
+            if (!cache.get(pk)) {
+                altKeys.delete(altKey);
+            }
+        }
+    };
+
     const remember = (message) => {
         const id = message?.key?.id;
         const chat = message?.key?.remoteJid;
-        if (!id || !chat || !message.message) {
+        if (!id || !chat || !message?.message || !isViewOnceMessage(message.message)) {
             return false;
         }
-        cache.set(storeKey(chat, id), {
-            key: { ...message.key, remoteJid: jidNormalizedUser(chat) },
+        const normalizedChat = jidNormalizedUser(chat);
+        const primaryKey = storeKey(normalizedChat, id);
+        const existing = cache.get(primaryKey);
+        if (existing && hasDownloadableViewOnceMedia(existing.message) && !hasDownloadableViewOnceMedia(message.message)) {
+            return false;
+        }
+        const entry = {
+            key: { ...message.key, remoteJid: normalizedChat },
             message: message.message
-        });
+        };
+        cache.set(primaryKey, entry);
+        let idSet = byId.get(id);
+        if (!idSet) {
+            idSet = new Set();
+            byId.set(id, idSet);
+        }
+        idSet.add(primaryKey);
+        if (typeof message.key.remoteJidAlt === 'string' && message.key.remoteJidAlt) {
+            altKeys.set(storeKey(message.key.remoteJidAlt, id), primaryKey);
+        }
+        pruneStaleIndexes();
         return true;
     };
+
+    const get = (jid, id) => {
+        if (!jid || !id) {
+            return undefined;
+        }
+        const key = storeKey(jid, id);
+        const direct = cache.get(key);
+        if (direct) {
+            return direct;
+        }
+        const altPrimary = altKeys.get(key);
+        if (altPrimary) {
+            const altEntry = cache.get(altPrimary);
+            if (altEntry) {
+                return altEntry;
+            }
+            altKeys.delete(key);
+        }
+        return undefined;
+    };
+
+    const getById = (id, preferredJid) => {
+        if (!id) {
+            return undefined;
+        }
+        if (preferredJid) {
+            const direct = get(preferredJid, id);
+            if (direct) {
+                return direct;
+            }
+        }
+        const keys = byId.get(id);
+        if (!keys?.size) {
+            return undefined;
+        }
+        const normalizedPreferred = preferredJid ? jidNormalizedUser(preferredJid) : undefined;
+        const preferredIsShared = isSharedChatJid(normalizedPreferred);
+        let fallback;
+        for (const pk of keys) {
+            const entry = cache.get(pk);
+            if (!entry) {
+                keys.delete(pk);
+                continue;
+            }
+            const entryChat = entry.key?.remoteJid;
+            const entryAlt = entry.key?.remoteJidAlt ? jidNormalizedUser(entry.key.remoteJidAlt) : undefined;
+            if (normalizedPreferred) {
+                const sameChat = entryChat === normalizedPreferred || entryAlt === normalizedPreferred;
+                if (preferredIsShared && !sameChat) {
+                    continue;
+                }
+                if (!preferredIsShared && isSharedChatJid(entryChat) && !sameChat) {
+                    continue;
+                }
+            }
+            if (hasDownloadableViewOnceMedia(entry.message)) {
+                return entry;
+            }
+            fallback ??= entry;
+        }
+        if (!keys.size) {
+            byId.delete(id);
+        }
+        return fallback;
+    };
+
+    const remove = (jid, id) => {
+        if (!jid || !id) {
+            return 0;
+        }
+        const key = storeKey(jid, id);
+        const primary = cache.get(key) ? key : altKeys.get(key);
+        if (!primary) {
+            return 0;
+        }
+        const entry = cache.get(primary);
+        const removed = cache.del(primary);
+        altKeys.delete(key);
+        if (entry?.key?.remoteJidAlt) {
+            altKeys.delete(storeKey(entry.key.remoteJidAlt, id));
+        }
+        const idSet = byId.get(id);
+        if (idSet) {
+            idSet.delete(primary);
+            if (!idSet.size) {
+                byId.delete(id);
+            }
+        }
+        return removed;
+    };
+
     return {
         remember,
-        get: (jid, id) => (jid && id ? cache.get(storeKey(jid, id)) : undefined),
-        delete: (jid, id) => (jid && id ? cache.del(storeKey(jid, id)) : 0),
+        get,
+        getById,
+        delete: remove,
         get size() {
             return cache.size;
         },
-        clear: () => cache.flushAll()
+        clear: () => {
+            cache.flushAll();
+            altKeys.clear();
+            byId.clear();
+        }
     };
+};
+
+const uniqueValues = (values) => [...new Set(values.filter(value => typeof value === 'string' && value.length > 0))];
+
+const findViewOnceWrapperKey = (message) => {
+    let current = message?.message ?? message;
+    for (let depth = 0; depth < 8 && current && typeof current === 'object'; depth++) {
+        const inner = findWrappedMessage(current);
+        if (!inner) {
+            break;
+        }
+        if (VIEW_ONCE_WRAPPER_KEYS.includes(inner.key)) {
+            return inner.key;
+        }
+        current = inner.message;
+    }
+    return 'viewOnceMessageV2';
+};
+
+const buildCleanViewOnceMedia = (originalMessage, mediaKeyName, media) => {
+    const clean = { ...media };
+    delete clean.contextInfo;
+    if (!clean.url && typeof clean.directPath === 'string' && clean.directPath.length > 0) {
+        clean.url = getUrlFromDirectPath(clean.directPath);
+    }
+    if (mediaKeyName !== 'ptvMessage' && clean.viewOnce === undefined) {
+        clean.viewOnce = true;
+    }
+    return clean;
+};
+
+const resolveTargetsSync = ({ jids, ids, store, messageRetryManager, requireDownloadable = true }) => {
+    const matches = (msg) => {
+        if (!msg || !isViewOnceMessage(msg.message ?? msg)) {
+            return false;
+        }
+        return !requireDownloadable || hasDownloadableViewOnceMedia(msg.message ?? msg);
+    };
+    if (store) {
+        for (const id of ids) {
+            for (const jid of jids) {
+                const entry = store.get?.(jid, id);
+                if (matches(entry)) {
+                    return entry;
+                }
+            }
+            if (typeof store.getById === 'function') {
+                for (const jid of jids) {
+                    const entry = store.getById(id, jid);
+                    if (matches(entry)) {
+                        return entry;
+                    }
+                }
+                if (!jids.length) {
+                    const entry = store.getById(id);
+                    if (matches(entry)) {
+                        return entry;
+                    }
+                }
+            }
+        }
+    }
+    if (messageRetryManager?.getRecentMessage) {
+        for (const id of ids) {
+            for (const jid of jids) {
+                const recent = messageRetryManager.getRecentMessage(jid, id);
+                const msg = recent?.message;
+                if (msg && matches({ message: msg })) {
+                    return {
+                        key: { remoteJid: jidNormalizedUser(jid), id },
+                        message: msg
+                    };
+                }
+            }
+        }
+    }
+    return undefined;
+};
+
+const resolveTargetsAsync = async ({ jids, ids, participant, store, messageRetryManager, getMessage, logger, requireDownloadable = true }) => {
+    const syncEntry = resolveTargetsSync({ jids, ids, store, messageRetryManager, requireDownloadable });
+    if (syncEntry) {
+        return syncEntry;
+    }
+    if (typeof getMessage !== 'function') {
+        return undefined;
+    }
+    for (const id of ids) {
+        for (const jid of jids) {
+            try {
+                const loaded = await getMessage({
+                    remoteJid: jid,
+                    id,
+                    ...(participant ? { participant } : {})
+                });
+                const loadedMessage = loaded?.message ?? (loaded && !loaded.key && isViewOnceMessage(loaded) ? loaded : undefined);
+                if (!loadedMessage || !isViewOnceMessage(loadedMessage)) {
+                    continue;
+                }
+                if (requireDownloadable && !hasDownloadableViewOnceMedia(loadedMessage)) {
+                    continue;
+                }
+                const normalized = {
+                    key: {
+                        remoteJid: jidNormalizedUser(loaded?.key?.remoteJid || jid),
+                        id: loaded?.key?.id || id,
+                        ...(loaded?.key || {})
+                    },
+                    message: loadedMessage
+                };
+                store?.remember?.(normalized);
+                return normalized;
+            }
+            catch (error) {
+                logger?.debug?.({ error, jid, id }, 'getMessage lookup failed during view-once resolution');
+            }
+        }
+    }
+    return undefined;
+};
+
+const hydrateContextWithOriginal = (context, original) => {
+    const origUnwrapped = unwrapViewOnce(original?.message ?? original);
+    const origInfo = extractViewOnceMedia(origUnwrapped);
+    if (!origInfo) {
+        return false;
+    }
+    const cleanMedia = buildCleanViewOnceMedia(original?.message ?? original, origInfo.key, origInfo.media);
+    const quoted = context.quotedMessage;
+    const quotedContent = quoted ? unwrapViewOnce(quoted) : undefined;
+    const quotedInfo = quotedContent ? extractViewOnceMedia(quotedContent) : undefined;
+
+    if (quotedInfo?.media) {
+        for (const [field, value] of Object.entries(cleanMedia)) {
+            if (value === undefined || value === null) {
+                continue;
+            }
+            const current = quotedInfo.media[field];
+            if (MEDIA_CRITICAL_FIELDS.has(field)) {
+                if (isEmptyBinary(current) || field === 'url' || field === 'directPath' || field === 'mediaKey') {
+                    quotedInfo.media[field] = value;
+                }
+            }
+            else if (isEmptyBinary(current)) {
+                quotedInfo.media[field] = value;
+            }
+        }
+        return true;
+    }
+
+    if (quotedContent && typeof quotedContent === 'object') {
+        quotedContent[origInfo.key] = cleanMedia;
+        return true;
+    }
+
+    if (quoted && typeof quoted === 'object') {
+        for (const wrapperKey of VIEW_ONCE_WRAPPER_KEYS) {
+            if (quoted[wrapperKey] && typeof quoted[wrapperKey] === 'object') {
+                quoted[wrapperKey].message = { [origInfo.key]: cleanMedia };
+                return true;
+            }
+        }
+    }
+
+    const wrapperKey = findViewOnceWrapperKey(original?.message ?? original);
+    context.quotedMessage = {
+        [wrapperKey]: {
+            message: {
+                [origInfo.key]: cleanMedia
+            }
+        }
+    };
+    return true;
+};
+
+const ensureDirectPathUrl = (quoted) => {
+    const info = extractViewOnceMedia(unwrapViewOnce(quoted));
+    if (info?.media && !info.media.url && typeof info.media.directPath === 'string' && info.media.directPath.length > 0) {
+        info.media.url = getUrlFromDirectPath(info.media.directPath);
+    }
+};
+
+const candidateJidsForContext = (message, context) => uniqueValues([
+    context?.remoteJid,
+    message?.key?.remoteJid,
+    message?.key?.remoteJidAlt
+]);
+
+const candidateIdsForContext = (context) => uniqueValues([
+    context?.stanzaId,
+    context?.quotedMessageId
+]);
+
+export const needsQuotedViewOnceHydration = (message, store) => {
+    const contexts = collectQuoteContexts(message);
+    if (!contexts.length) {
+        return false;
+    }
+    for (const context of contexts) {
+        const ids = candidateIdsForContext(context);
+        if (!ids.length) {
+            continue;
+        }
+        const quoted = context.quotedMessage;
+        if (quoted && isViewOnceMessage(quoted)) {
+            if (!hasDownloadableViewOnceMedia(quoted)) {
+                return true;
+            }
+            ensureDirectPathUrl(quoted);
+            continue;
+        }
+        if (store) {
+            const jids = candidateJidsForContext(message, context);
+            const hit = resolveTargetsSync({ jids, ids, store, requireDownloadable: true });
+            if (hit) {
+                return true;
+            }
+        }
+        if (!quoted || typeof quoted !== 'object' || !Object.keys(quoted).length || quoted.placeholderMessage) {
+            return true;
+        }
+    }
+    return false;
+};
+
+export const hydrateQuotedViewOnceSync = (message, { store, messageRetryManager } = {}) => {
+    const contexts = collectQuoteContexts(message);
+    if (!contexts.length) {
+        return false;
+    }
+    let hydrated = false;
+    for (const context of contexts) {
+        const ids = candidateIdsForContext(context);
+        if (!ids.length) {
+            continue;
+        }
+        const quoted = context.quotedMessage;
+        if (quoted && isViewOnceMessage(quoted) && hasDownloadableViewOnceMedia(quoted)) {
+            ensureDirectPathUrl(quoted);
+            continue;
+        }
+        const jids = candidateJidsForContext(message, context);
+        const original = resolveTargetsSync({ jids, ids, store, messageRetryManager, requireDownloadable: true });
+        if (original && hydrateContextWithOriginal(context, original)) {
+            hydrated = true;
+        }
+    }
+    return hydrated;
+};
+
+export const hydrateQuotedViewOnce = async (message, { store, messageRetryManager, getMessage, logger } = {}) => {
+    const contexts = collectQuoteContexts(message);
+    if (!contexts.length) {
+        return false;
+    }
+    let hydrated = false;
+    for (const context of contexts) {
+        const ids = candidateIdsForContext(context);
+        if (!ids.length) {
+            continue;
+        }
+        const quoted = context.quotedMessage;
+        if (quoted && isViewOnceMessage(quoted) && hasDownloadableViewOnceMedia(quoted)) {
+            ensureDirectPathUrl(quoted);
+            continue;
+        }
+        const jids = candidateJidsForContext(message, context);
+        const quotedLooksViewOnce = isViewOnceMessage(quoted);
+        const quotedIsEmptyStub = !quoted || typeof quoted !== 'object' || !Object.keys(quoted).length || Boolean(quoted.placeholderMessage);
+        const original = quotedLooksViewOnce || quotedIsEmptyStub
+            ? await resolveTargetsAsync({
+                jids,
+                ids,
+                participant: context.participant,
+                store,
+                messageRetryManager,
+                getMessage,
+                logger,
+                requireDownloadable: true
+            })
+            : resolveTargetsSync({ jids, ids, store, messageRetryManager, requireDownloadable: true });
+        if (original && hydrateContextWithOriginal(context, original)) {
+            hydrated = true;
+        }
+    }
+    return hydrated;
+};
+
+export const resolveViewOnceMessage = async (message, options = {}) => {
+    const store = options.store ?? options.sock?.viewOnceStore;
+    const messageRetryManager = options.messageRetryManager ?? options.sock?.messageRetryManager;
+    const getMessage = options.getMessage ?? options.sock?.getMessage;
+    const logger = options.logger;
+
+    if (hasDownloadableViewOnceMedia(message)) {
+        const cloned = {
+            key: message?.key,
+            message: message?.message ?? message
+        };
+        ensureDirectPathUrl(cloned.message);
+        return cloned;
+    }
+
+    const keyIds = uniqueValues([message?.key?.id]);
+    const keyJids = uniqueValues([message?.key?.remoteJid, message?.key?.remoteJidAlt]);
+    if (keyIds.length) {
+        const resolvedByKey = await resolveTargetsAsync({
+            jids: keyJids,
+            ids: keyIds,
+            participant: message?.key?.participant,
+            store,
+            messageRetryManager,
+            getMessage,
+            logger,
+            requireDownloadable: true
+        });
+        if (resolvedByKey) {
+            return resolvedByKey;
+        }
+    }
+
+    const contexts = collectQuoteContexts(message);
+    for (const context of contexts) {
+        const ids = candidateIdsForContext(context);
+        const jids = candidateJidsForContext(message, context);
+        if (ids.length) {
+            const resolvedFromQuote = await resolveTargetsAsync({
+                jids,
+                ids,
+                participant: context.participant,
+                store,
+                messageRetryManager,
+                getMessage,
+                logger,
+                requireDownloadable: true
+            });
+            if (resolvedFromQuote) {
+                return resolvedFromQuote;
+            }
+        }
+        if (context.quotedMessage && isViewOnceMessage(context.quotedMessage)) {
+            return {
+                key: {
+                    remoteJid: jids[0],
+                    id: ids[0],
+                    ...(context.participant ? { participant: context.participant } : {})
+                },
+                message: context.quotedMessage
+            };
+        }
+    }
+
+    if (isViewOnceMessage(message?.message ?? message)) {
+        return {
+            key: message?.key,
+            message: message?.message ?? message
+        };
+    }
+
+    return undefined;
 };
 
 export const openViewOnceMedia = async (message, options = {}) => {
@@ -145,14 +746,31 @@ export const openViewOnceMedia = async (message, options = {}) => {
         maxBytes = DEFAULT_VIEW_ONCE_MAX_BYTES,
         recover = true,
         download = downloadMediaMessage,
-        downloadOptions
+        downloadOptions,
+        store = sock?.viewOnceStore,
+        getMessage = sock?.getMessage,
+        messageRetryManager = sock?.messageRetryManager
     } = options;
-    const content = unwrapViewOnce(message?.message ?? message);
-    const type = mediaTypeOfContent(content);
-    if (!content || !type) {
+
+    const resolved = await resolveViewOnceMessage(message, {
+        sock,
+        store,
+        getMessage,
+        messageRetryManager,
+        logger
+    });
+    const content = unwrapViewOnce(resolved?.message ?? message?.message ?? message);
+    const info = extractViewOnceMedia(content);
+    if (!content || !info) {
         throw new Boom('Not a view-once media message', { statusCode: 400, data: message?.key });
     }
-    const media = content[`${type}Message`];
+    const { key: mediaKeyName, type, media } = info;
+    if (!options.download && (!hasUsableMediaKey(media.mediaKey) || !hasMediaLocation(media))) {
+        throw new Boom('View-once media is missing mediaKey or url/directPath and was not found in cache', {
+            statusCode: 422,
+            data: { key: resolved?.key ?? message?.key, type }
+        });
+    }
     const declaredLength = Number(media.fileLength);
     if (Number.isFinite(declaredLength) && maxBytes && declaredLength > maxBytes) {
         throw new Boom(`View-once media is ${declaredLength} bytes, over the ${maxBytes} byte limit`, {
@@ -160,9 +778,12 @@ export const openViewOnceMedia = async (message, options = {}) => {
             data: { type, fileLength: declaredLength }
         });
     }
+    const normalizedDownloadContent = mediaKeyName === 'instantImageMessage'
+        ? { imageMessage: media }
+        : content;
     const target = {
-        key: message?.key,
-        message: content
+        key: resolved?.key ?? message?.key,
+        message: normalizedDownloadContent
     };
     const downloaded = await download(target, mode === 'buffer' ? 'buffer' : 'stream', downloadOptions ?? {}, {
         logger,
@@ -244,7 +865,8 @@ const VIEW_ONCE_DEFAULTS = Object.freeze({
     shouldRetrieve: undefined,
     logger: undefined,
     download: undefined,
-    downloadOptions: undefined
+    downloadOptions: undefined,
+    getMessage: undefined
 });
 
 export const normalizeViewOnceOptions = (value) => {
@@ -293,6 +915,61 @@ const scopeAllows = (scope, chat, sender) => {
     return false;
 };
 
+export const bindViewOnceCache = (sock, options = {}) => {
+    const store = options.store ?? sock?.viewOnceStore;
+    if (!store || typeof sock?.ev?.on !== 'function') {
+        return () => {};
+    }
+    const messageRetryManager = options.messageRetryManager ?? sock?.messageRetryManager;
+    const onUpsert = (event) => {
+        const messages = Array.isArray(event?.messages) ? event.messages : [];
+        for (const message of messages) {
+            if (!message?.message || !message?.key?.remoteJid || message.key.remoteJid === 'status@broadcast') {
+                continue;
+            }
+            if (isViewOnceMessage(message.message)) {
+                store.remember(message);
+            }
+            hydrateQuotedViewOnceSync(message, { store, messageRetryManager });
+        }
+    };
+    const onUpdate = (updates) => {
+        if (!Array.isArray(updates)) {
+            return;
+        }
+        for (const item of updates) {
+            const msg = item?.update?.message;
+            if (msg && item?.key && isViewOnceMessage(msg)) {
+                store.remember({ key: item.key, message: msg });
+            }
+        }
+    };
+    const onHistory = (event) => {
+        const messages = Array.isArray(event?.messages) ? event.messages : [];
+        const viewOnceMessages = [];
+        for (const message of messages) {
+            if (message?.key?.remoteJid && message.key.remoteJid !== 'status@broadcast' && hasDownloadableViewOnceMedia(message)) {
+                viewOnceMessages.push(message);
+            }
+        }
+        viewOnceMessages.sort((a, b) => Number(a?.messageTimestamp || 0) - Number(b?.messageTimestamp || 0));
+        for (const message of viewOnceMessages) {
+            store.remember(message);
+        }
+    };
+    sock.ev.on('messages.upsert', onUpsert);
+    sock.ev.on('messages.update', onUpdate);
+    sock.ev.on('messaging-history.set', onHistory);
+    return () => {
+        sock.ev.off?.('messages.upsert', onUpsert);
+        sock.ev.off?.('messages.update', onUpdate);
+        sock.ev.off?.('messaging-history.set', onHistory);
+        if (options.clearOnStop) {
+            store.clear?.();
+        }
+    };
+};
+
 export const bindViewOnceRetrieval = (sock, config = {}) => {
     const options = normalizeViewOnceOptions(config.viewOnceRetrieval ?? config.viewOnce);
     if (!options.enabled) {
@@ -300,7 +977,10 @@ export const bindViewOnceRetrieval = (sock, config = {}) => {
     }
     const logger = options.logger ?? config.logger;
     const emojis = normalizeEmojis(options.emojis);
-    const store = options.store ?? makeViewOnceStore({ max: options.cacheSize, ttlMs: options.ttlMs });
+    const ownsStore = !options.store && !sock?.viewOnceStore;
+    const store = options.store ?? sock?.viewOnceStore ?? makeViewOnceStore({ max: options.cacheSize, ttlMs: options.ttlMs });
+    const getMessage = options.getMessage ?? config.getMessage ?? sock?.getMessage;
+    const messageRetryManager = sock?.messageRetryManager;
     const pending = new Set();
 
     const deliver = async ({ stored, chat, trigger, source }) => {
@@ -319,6 +999,9 @@ export const bindViewOnceRetrieval = (sock, config = {}) => {
             const media = await openViewOnceMedia(stored, {
                 sock,
                 logger,
+                store,
+                getMessage,
+                messageRetryManager,
                 mode: options.mode,
                 maxBytes: options.maxBytes,
                 recover: options.recover,
@@ -382,6 +1065,11 @@ export const bindViewOnceRetrieval = (sock, config = {}) => {
                 if (!content) {
                     continue;
                 }
+                if (isViewOnceMessage(message.message) || isViewOnceMessage(content)) {
+                    store.remember(message);
+                }
+                hydrateQuotedViewOnceSync(message, { store, messageRetryManager });
+
                 const fromMe = !!message.key.fromMe;
                 if (fromMe && !options.allowFromMe) {
                     continue;
@@ -404,7 +1092,16 @@ export const bindViewOnceRetrieval = (sock, config = {}) => {
                     if (targetChat === 'status@broadcast' || !scopeAllows(scope, targetChat, message.key.participant || targetChat)) {
                         continue;
                     }
-                    const stored = store.get(targetChat, targetKey.id);
+                    const stored = await resolveTargetsAsync({
+                        jids: uniqueValues([targetChat, message.key.remoteJidAlt]),
+                        ids: [targetKey.id],
+                        participant: targetKey.participant,
+                        store,
+                        messageRetryManager,
+                        getMessage,
+                        logger,
+                        requireDownloadable: false
+                    });
                     if (!stored) {
                         continue;
                     }
@@ -412,31 +1109,38 @@ export const bindViewOnceRetrieval = (sock, config = {}) => {
                     continue;
                 }
 
-                if (isViewOnceMessage(message.message) || isViewOnceMessage(content)) {
-                    store.remember(message);
-                }
-
                 if (!options.reply) {
                     continue;
                 }
                 const context = contextInfoOf(content) ?? contextInfoOf(message.message);
-                if (!context?.quotedMessage || !context.stanzaId) {
+                if (!context?.stanzaId && !context?.quotedMessageId) {
                     continue;
                 }
                 const quoted = context.quotedMessage;
-                let stored;
-                if (isViewOnceMessage(quoted)) {
+                const quoteIds = candidateIdsForContext(context);
+                const quoteJids = candidateJidsForContext(message, context);
+                const quotedLooksViewOnce = isViewOnceMessage(quoted);
+                const quotedIsEmptyStub = !quoted || typeof quoted !== 'object' || !Object.keys(quoted).length || Boolean(quoted.placeholderMessage);
+
+                let stored = await resolveTargetsAsync({
+                    jids: quoteJids,
+                    ids: quoteIds,
+                    participant: context.participant,
+                    store,
+                    messageRetryManager,
+                    getMessage: quotedLooksViewOnce || quotedIsEmptyStub ? getMessage : undefined,
+                    logger,
+                    requireDownloadable: true
+                });
+                if (!stored && quotedLooksViewOnce) {
                     stored = {
                         key: {
-                            remoteJid: chat,
-                            id: context.stanzaId,
+                            remoteJid: quoteJids[0] || chat,
+                            id: quoteIds[0],
                             ...(context.participant ? { participant: context.participant } : {})
                         },
                         message: quoted
                     };
-                }
-                else {
-                    stored = store.get(chat, context.stanzaId) ?? store.get(chat, context.quotedMessageId);
                 }
                 if (!stored) {
                     continue;
@@ -453,6 +1157,8 @@ export const bindViewOnceRetrieval = (sock, config = {}) => {
     return () => {
         sock.ev.off('messages.upsert', handler);
         pending.clear();
-        store.clear?.();
+        if (ownsStore) {
+            store.clear?.();
+        }
     };
 };

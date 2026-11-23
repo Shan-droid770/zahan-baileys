@@ -86,8 +86,27 @@ export const getRawMediaUploadData = async (media, mediaType, logger) => {
     }
 };
 
-export async function getMediaKeys(buffer, mediaType) {
+const isEmptyMediaKey = (buffer) => {
     if (!buffer) {
+        return true;
+    }
+    if (typeof buffer === 'string') {
+        return !buffer.trim().length;
+    }
+    if (ArrayBuffer.isView(buffer) || buffer instanceof ArrayBuffer) {
+        return buffer.byteLength === 0;
+    }
+    if (Array.isArray(buffer)) {
+        return buffer.length === 0;
+    }
+    if (typeof buffer === 'object' && buffer.type === 'Buffer' && Array.isArray(buffer.data)) {
+        return buffer.data.length === 0;
+    }
+    return false;
+};
+
+export async function getMediaKeys(buffer, mediaType) {
+    if (isEmptyMediaKey(buffer)) {
         throw new Boom('Cannot derive from empty media key');
     }
     if (typeof buffer === 'string') {

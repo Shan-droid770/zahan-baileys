@@ -4,7 +4,9 @@ import { Readable } from 'node:stream';
 import { mkdtempSync, rmSync, writeFileSync, utimesSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildViewOncePayload, bindViewOnceRetrieval, describeViewOnce, downloadViewOnceMedia, getViewOnceMediaType, isViewOnceMessage, makeViewOnceStore, normalizeViewOnceOptions, openViewOnceMedia, unwrapViewOnce } from '../src/Utils/view-once.js';
+import { bindViewOnceCache, bindViewOnceRetrieval, buildViewOncePayload, describeViewOnce, downloadViewOnceMedia, getViewOnceMediaType, hasDownloadableViewOnceMedia, hydrateQuotedViewOnce, isViewOnceMessage, makeViewOnceStore, normalizeViewOnceOptions, openViewOnceMedia, resolveViewOnceMessage, unwrapViewOnce } from '../src/Utils/view-once.js';
+import { getMediaKeys } from '../src/Utils/messages-media.js';
+import { downloadMediaMessage } from '../src/Utils/messages.js';
 import { prepareStatusImage, prepareStatusMedia } from '../src/Utils/status-media.js';
 import { expandStatusTargets, makeChannelStatusSender, makeStatusSender, resolveStatusTargets } from '../src/Utils/status-send.js';
 import { bindResourceGuard, cleanupTempMedia, getStorageUsage, getTempMediaDirectory, getTempMediaUsage, trimMemory } from '../src/Utils/resource-guard.js';
@@ -238,6 +240,173 @@ test('view-once retrieval can be disabled', async () => {
     assert.equal(sent.length, 0);
     stop();
     assert.equal(normalizeViewOnceOptions(undefined).enabled, true);
+});
+
+test('stripped quoted view-once replies recover mediaKey and urls from store, LID/PN alt jids, fromMe originals, and getMessage', async () => {
+    const store = makeViewOnceStore();
+    const chatPn = '94770000001@s.whatsapp.net';
+    const chatLid = '123456789012345@lid';
+    const fullMedia = {
+        directPath: '/v/t62.7118-24/fake-path',
+        mediaKey: Buffer.from('0123456789abcdef0123456789abcdef'),
+        fileSha256: Buffer.from('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+        fileEncSha256: Buffer.from('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
+        fileLength: 42,
+        mimetype: 'image/jpeg',
+        caption: 'from updated client',
+        viewOnce: true
+    };
+    const originalFromMe = {
+        key: { remoteJid: chatPn, remoteJidAlt: chatLid, id: 'VO-STRIPPED-1', fromMe: true },
+        message: viewOnceWrapper(fullMedia)
+    };
+    store.remember(originalFromMe);
+    assert.equal(store.get(chatLid, 'VO-STRIPPED-1')?.key?.id, 'VO-STRIPPED-1');
+
+    const replyWithStrippedQuote = {
+        key: { remoteJid: chatLid, id: 'VV-CMD-1', fromMe: false },
+        message: {
+            extendedTextMessage: {
+                text: '.vv',
+                contextInfo: {
+                    stanzaId: 'VO-STRIPPED-1',
+                    quotedMessage: {
+                        viewOnceMessageV2: {
+                            message: {
+                                imageMessage: {
+                                    mimetype: 'image/jpeg',
+                                    mediaKey: Buffer.alloc(0),
+                                    viewOnce: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    assert.equal(hasDownloadableViewOnceMedia(replyWithStrippedQuote.message.extendedTextMessage.contextInfo.quotedMessage), false);
+    const hydrated = await hydrateQuotedViewOnce(replyWithStrippedQuote, { store });
+    assert.equal(hydrated, true);
+    const hydratedQuoted = replyWithStrippedQuote.message.extendedTextMessage.contextInfo.quotedMessage;
+    assert.equal(hasDownloadableViewOnceMedia(hydratedQuoted), true);
+    assert.equal(hydratedQuoted.viewOnceMessageV2.message.imageMessage.directPath, fullMedia.directPath);
+    assert.equal(hydratedQuoted.viewOnceMessageV2.message.imageMessage.url, 'https://mmg.whatsapp.net/v/t62.7118-24/fake-path');
+    assert.equal(hydratedQuoted.viewOnceMessageV2.message.imageMessage.caption, 'from updated client');
+
+    const { sock, sent } = makeSocket();
+    sock.viewOnceStore = makeViewOnceStore();
+    const stopCache = bindViewOnceCache(sock, { store: sock.viewOnceStore });
+    const stopRetrieval = bindViewOnceRetrieval(sock, {
+        logger,
+        viewOnceRetrieval: {
+            reply: true,
+            react: false,
+            ackEmoji: null,
+            download: async (target) => {
+                assert.equal(hasDownloadableViewOnceMedia(target.message), true);
+                return Readable.from(Buffer.from('ok'));
+            }
+        }
+    });
+
+    await sock.ev.emit('messages.upsert', { type: 'notify', messages: [originalFromMe] });
+    await sock.ev.emit('messages.upsert', {
+        type: 'notify',
+        messages: [{
+            key: { remoteJid: chatLid, id: 'VV-CMD-2', fromMe: false },
+            message: {
+                extendedTextMessage: {
+                    text: '.vv',
+                    contextInfo: {
+                        stanzaId: 'VO-STRIPPED-1',
+                        quotedMessage: {
+                            viewOnceMessageV2: {
+                                message: {
+                                    imageMessage: { mimetype: 'image/jpeg', viewOnce: true }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }]
+    });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].content.caption, 'from updated client');
+    stopRetrieval();
+    stopCache();
+
+    const getMessageHit = await resolveViewOnceMessage({
+        key: { remoteJid: chatPn, id: 'VV-CMD-3', fromMe: false },
+        message: {
+            extendedTextMessage: {
+                text: '.vv',
+                contextInfo: {
+                    stanzaId: 'VO-FROM-DB',
+                    quotedMessage: {
+                        viewOnceMessageV2: {
+                            message: { imageMessage: { mimetype: 'image/jpeg', viewOnce: true } }
+                        }
+                    }
+                }
+            }
+        }
+    }, {
+        getMessage: async ({ id }) => (id === 'VO-FROM-DB' ? { key: { remoteJid: chatPn, id }, message: viewOnceWrapper(fullMedia) } : undefined)
+    });
+    assert.equal(getMessageHit?.key?.id, 'VO-FROM-DB');
+    assert.equal(hasDownloadableViewOnceMedia(getMessageHit), true);
+});
+
+test('stripped view-once stubs never overwrite cached originals, honor group isolation, and fail clearly when unrecoverable', async () => {
+    const store = makeViewOnceStore();
+    const groupA = '120363000000000001@g.us';
+    const groupB = '120363000000000002@g.us';
+    store.remember(makeMessage({ chat: groupA, id: 'SHARED-VO', message: viewOnceWrapper() }));
+    assert.equal(store.remember(makeMessage({
+        chat: groupA,
+        id: 'SHARED-VO',
+        message: viewOnceWrapper({ mimetype: 'image/jpeg', viewOnce: true })
+    })), false);
+    assert.equal(hasDownloadableViewOnceMedia(store.get(groupA, 'SHARED-VO')), true);
+    assert.equal(store.getById('SHARED-VO', groupA)?.key?.id, 'SHARED-VO');
+    assert.equal(store.getById('SHARED-VO', groupB), undefined);
+
+    assert.equal(isViewOnceMessage({ spoilerMessage: { message: viewOnceWrapper() } }), true);
+    assert.equal(getViewOnceMediaType({ viewOnceMessageV2: { message: { instantImageMessage: { mediaKey: Buffer.from('1234'), directPath: '/v/1' } } } }), 'image');
+    assert.equal(getViewOnceMediaType({ ptvMessage: { viewOnce: true, mediaKey: Buffer.from('1234'), directPath: '/v/2' } }), 'video');
+
+    await assert.rejects(
+        () => openViewOnceMedia(makeMessage({
+            id: 'VO-NO-KEY',
+            message: viewOnceWrapper({ mimetype: 'image/jpeg', viewOnce: true })
+        })),
+        (err) => err?.output?.statusCode === 422
+    );
+});
+
+test('getMediaKeys rejects empty buffers and downloadMediaMessage supports directPath-only media', async () => {
+    await assert.rejects(() => getMediaKeys(Buffer.alloc(0), 'image'), /empty media key/i);
+    await assert.rejects(() => getMediaKeys(new Uint8Array(0), 'image'), /empty media key/i);
+    await assert.rejects(() => getMediaKeys({ type: 'Buffer', data: [] }, 'image'), /empty media key/i);
+
+    await assert.rejects(
+        () => downloadMediaMessage({ message: { imageMessage: { url: undefined } } }, 'buffer'),
+        /not a media message/i
+    );
+    await assert.rejects(
+        () => downloadMediaMessage({
+            message: {
+                imageMessage: {
+                    directPath: '/v/t62.7118-24/no-key',
+                    thumbnailDirectPath: '/v/thumb'
+                }
+            }
+        }, 'buffer'),
+        (err) => !String(err?.message || '').includes('not a media message')
+    );
 });
 
 const hasSharp = await hasOptionalMedia('sharp').catch(() => false);
