@@ -16,7 +16,7 @@ import baseMakeWASocket from './Socket/index.js';
 import type { NewsletterStatusFetchOptions, NewsletterStatusList, NewsletterStatusSendOptions, NewsletterStatusSendResult, NewsletterStatusStanzaResult, NewsletterStatusUpdatesFetchOptions } from './Utils/newsletter-status.js';
 import type { StatusSendOptions } from './Utils/status-send.js';
 import type { AnyMessageContent, CheckNumbersOptions, ContactCheckResult, DownloadMediaHelperOptions, DownloadMediaOptions, MediaDownloadType, SendMessageOptions, SendQueueStats } from './Types/Content.js';
-import type { ViewOnceRetrievalOptions } from './Utils/view-once.js';
+import type { ViewOnceRetrievalOptions, ViewOnceStore } from './Utils/view-once.js';
 import type { getResourceUsage, trimMemory } from './Utils/resource-guard.js';
 import type { MultiSessionManager, MultiSessionManagerOptions } from './Utils/multi-session-manager.js';
 import type { SessionRecoveryRequest, SessionRecoveryResult, SessionRecoveryStats } from './Utils/session-recovery.js';
@@ -56,6 +56,8 @@ export type WASocket = BaseWASocket & {
     revokeChannelStatus: (jid: string, statusId: string, options?: Pick<NewsletterStatusSendOptions, 'ackTimeoutMs'>) => Promise<NewsletterStatusStanzaResult>;
     getChannelStatuses: (jid: string, options?: NewsletterStatusFetchOptions) => Promise<NewsletterStatusList>;
     getChannelStatusUpdates: (jid: string, options?: NewsletterStatusUpdatesFetchOptions) => Promise<NewsletterStatusList>;
+    viewOnceStore: ViewOnceStore;
+    resolveViewOnce: (message: any, options?: ViewOnceRetrievalOptions) => Promise<any>;
     openViewOnce: (message: any, options?: ViewOnceRetrievalOptions) => Promise<any>;
     downloadViewOnce: (message: any, options?: ViewOnceRetrievalOptions) => Promise<any>;
     retrieveViewOnce: (message: any, options?: ViewOnceRetrievalOptions) => Promise<any>;

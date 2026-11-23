@@ -4,12 +4,15 @@ export const VIEW_ONCE_MEDIA_KEYS: Readonly<{
     imageMessage: string;
     videoMessage: string;
     audioMessage: string;
+    ptvMessage: string;
+    instantImageMessage: string;
 }>;
 export const DEFAULT_VIEW_ONCE_MAX_BYTES: number;
 export const DEFAULT_VIEW_ONCE_TRIGGER_EMOJIS: readonly string[];
 export const DEFAULT_VIEW_ONCE_CACHE_SIZE: number;
 export const DEFAULT_VIEW_ONCE_TTL_MS: number;
 export function isViewOnceMessage(message: any): boolean;
+export function hasDownloadableViewOnceMedia(message: any): boolean;
 export function unwrapViewOnce(message: any): any;
 export function getViewOnceMediaType(message: any): 'image' | 'video' | 'audio' | undefined;
 export function describeViewOnce(message: any): {
@@ -26,6 +29,7 @@ export function describeViewOnce(message: any): {
 export type ViewOnceStore = {
     remember(message: any): boolean;
     get(jid: string, id: string): any;
+    getById?(id: string, preferredJid?: string): any;
     delete(jid: string, id: string): number;
     readonly size: number;
     clear(): void;
@@ -34,6 +38,24 @@ export function makeViewOnceStore(options?: {
     max?: number;
     ttlMs?: number;
 }): ViewOnceStore;
+export function needsQuotedViewOnceHydration(message: any, store?: ViewOnceStore): boolean;
+export function hydrateQuotedViewOnceSync(message: any, options?: {
+    store?: ViewOnceStore;
+    messageRetryManager?: any;
+}): boolean;
+export function hydrateQuotedViewOnce(message: any, options?: {
+    store?: ViewOnceStore;
+    messageRetryManager?: any;
+    getMessage?: (key: any) => Promise<any>;
+    logger?: any;
+}): Promise<boolean>;
+export function resolveViewOnceMessage(message: any, options?: {
+    sock?: any;
+    store?: ViewOnceStore;
+    messageRetryManager?: any;
+    getMessage?: (key: any) => Promise<any>;
+    logger?: any;
+}): Promise<any>;
 export function openViewOnceMedia(message: any, options?: any): Promise<any>;
 export function downloadViewOnceMedia(message: any, options?: any): Promise<any>;
 export function buildViewOncePayload(media: any, options?: any): any;
@@ -62,6 +84,12 @@ export type ViewOnceRetrievalOptions = {
     sendOptions?: Record<string, any>;
     logger?: any;
     store?: ViewOnceStore;
+    getMessage?: (key: any) => Promise<any>;
 };
 export function normalizeViewOnceOptions(value?: boolean | ViewOnceRetrievalOptions): ViewOnceRetrievalOptions;
+export function bindViewOnceCache(sock: any, options?: {
+    store?: ViewOnceStore;
+    messageRetryManager?: any;
+    clearOnStop?: boolean;
+}): () => void;
 export function bindViewOnceRetrieval(sock: any, config?: any): () => void;

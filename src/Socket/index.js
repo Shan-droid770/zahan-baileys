@@ -8,7 +8,7 @@ import { createSendRateLimiter, normalizeSendRateLimit, typingDelayMs } from '..
 import { isJidNewsletter } from '../WABinary/index.js';
 import { makeNewsletterStatusFetcher, makeNewsletterStatusUpdatesFetcher, makeNewsletterStatusReactionSender, makeNewsletterStatusRevokeSender, makeNewsletterStatusSender } from '../Utils/newsletter-status.js';
 import { bindVoiceRecognition } from '../Utils/voice-recognition.js';
-import { bindViewOnceRetrieval, downloadViewOnceMedia, openViewOnceMedia } from '../Utils/view-once.js';
+import { bindViewOnceCache, bindViewOnceRetrieval, downloadViewOnceMedia, hasDownloadableViewOnceMedia, isViewOnceMessage, makeViewOnceStore, normalizeViewOnceOptions, openViewOnceMedia, resolveViewOnceMessage } from '../Utils/view-once.js';
 import { bindResourceGuard } from '../Utils/resource-guard.js';
 import { makeChannelStatusSender, makeStatusSender } from '../Utils/status-send.js';
 import { makeCommunitiesSocket } from './communities.js';
@@ -18,8 +18,19 @@ const makeWASocket = (config) => {
         ...DEFAULT_CONNECTION_CONFIG,
         ...config
     };
-    const sock = makeCommunitiesSocket(newConfig);
-    bindVoiceRecognition(sock, newConfig);
+    const viewOnceOptions = normalizeViewOnceOptions(newConfig.viewOnceRetrieval ?? newConfig.viewOnce);
+    const viewOnceStore = viewOnceOptions.store ?? makeViewOnceStore({
+        max: viewOnceOptions.cacheSize,
+        ttlMs: viewOnceOptions.ttlMs
+    });
+    const socketConfig = {
+        ...newConfig,
+        viewOnceStore
+    };
+    const sock = makeCommunitiesSocket(socketConfig);
+    sock.viewOnceStore = viewOnceStore;
+    sock.getMessage = newConfig.getMessage;
+    bindVoiceRecognition(sock, socketConfig);
     const sendMessage = sock.sendMessage.bind(sock);
     const rateLimit = normalizeSendRateLimit(newConfig.sendRateLimit);
     const limiter = rateLimit ? createSendRateLimiter({ ...rateLimit, logger: newConfig.logger }) : null;
@@ -73,7 +84,17 @@ const makeWASocket = (config) => {
         if (recover && typeof sock.updateMediaMessage === 'function') {
             ctx.reuploadRequest = sock.updateMediaMessage;
         }
-        const result = await downloadMediaMessage(message, type, options, ctx);
+        let targetMessage = message;
+        if (isViewOnceMessage(message?.message ?? message) && !hasDownloadableViewOnceMedia(message)) {
+            targetMessage = (await resolveViewOnceMessage(message, {
+                sock,
+                store: viewOnceStore,
+                getMessage: newConfig.getMessage,
+                messageRetryManager: sock.messageRetryManager,
+                logger: ctx.logger
+            })) ?? message;
+        }
+        const result = await downloadMediaMessage(targetMessage, type, options, ctx);
         if (cacheable && Buffer.isBuffer(result)) {
             mediaCache.set(cacheKey, result);
         }
@@ -93,10 +114,41 @@ const makeWASocket = (config) => {
     sock.revokeChannelStatus = sock.revokeNewsletterStatus;
     sock.getChannelStatuses = sock.getNewsletterStatuses;
     sock.getChannelStatusUpdates = sock.getNewsletterStatusUpdates;
-    sock.openViewOnce = (message, options = {}) => openViewOnceMedia(message, { sock, logger: newConfig.logger, ...options });
-    sock.downloadViewOnce = (message, options = {}) => downloadViewOnceMedia(message, { sock, logger: newConfig.logger, ...options });
+    const stopViewOnceCache = bindViewOnceCache(sock, {
+        store: viewOnceStore,
+        messageRetryManager: sock.messageRetryManager
+    });
+    sock.resolveViewOnce = (message, options = {}) => resolveViewOnceMessage(message, {
+        sock,
+        store: viewOnceStore,
+        getMessage: newConfig.getMessage,
+        messageRetryManager: sock.messageRetryManager,
+        logger: newConfig.logger,
+        ...options
+    });
+    sock.openViewOnce = (message, options = {}) => openViewOnceMedia(message, {
+        sock,
+        store: viewOnceStore,
+        getMessage: newConfig.getMessage,
+        logger: newConfig.logger,
+        ...options
+    });
+    sock.downloadViewOnce = (message, options = {}) => downloadViewOnceMedia(message, {
+        sock,
+        store: viewOnceStore,
+        getMessage: newConfig.getMessage,
+        logger: newConfig.logger,
+        ...options
+    });
     sock.retrieveViewOnce = sock.downloadViewOnce;
-    sock.stopViewOnceRetrieval = bindViewOnceRetrieval(sock, newConfig);
+    sock.stopViewOnceRetrieval = bindViewOnceRetrieval(sock, socketConfig);
+    sock.registerSocketEndHandler?.(() => {
+        stopViewOnceCache();
+        sock.stopViewOnceRetrieval?.();
+        if (!viewOnceOptions.store) {
+            viewOnceStore.clear?.();
+        }
+    });
     bindResourceGuard(sock, newConfig);
     if (newConfig.AnchorGuard) {
         import('@rexxhayanasi/elaina-anchorguard')

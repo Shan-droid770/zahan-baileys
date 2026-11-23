@@ -2061,11 +2061,14 @@ export const downloadMediaMessage = async (message, type, options, ctx) => {
         const contentType = getContentType(mContent);
         let mediaType = contentType?.replace('Message', '');
         const media = mContent[contentType];
-        if (!media || typeof media !== 'object' || (!('url' in media) && !('thumbnailDirectPath' in media))) {
+        const hasUrl = typeof media?.url === 'string' && media.url.length > 0;
+        const hasDirectPath = typeof media?.directPath === 'string' && media.directPath.length > 0;
+        const hasThumbDirectPath = typeof media?.thumbnailDirectPath === 'string' && media.thumbnailDirectPath.length > 0;
+        if (!media || typeof media !== 'object' || (!hasUrl && !hasDirectPath && !hasThumbDirectPath)) {
             throw new Boom(`"${contentType}" message is not a media message`);
         }
         let download;
-        if ('thumbnailDirectPath' in media && !('url' in media)) {
+        if (hasThumbDirectPath && !hasUrl && !hasDirectPath) {
             download = {
                 directPath: media.thumbnailDirectPath,
                 mediaKey: media.mediaKey

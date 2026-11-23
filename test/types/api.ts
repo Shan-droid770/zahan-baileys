@@ -8,9 +8,12 @@ import makeWASocket, {
     type SendQueueStats,
     type SessionBackupOptions,
     type SessionRecoveryRequest,
+    bindViewOnceCache,
     classifyRetryError,
     createSessionManager,
     exportSession,
+    hasDownloadableViewOnceMedia,
+    hydrateQuotedViewOnce,
     importSession,
     restoreSession,
     createSharedGroupMetadataCache
@@ -61,5 +64,10 @@ const authState = { creds: {} as any, keys: {} as any, saveCreds: async () => un
 const exported: Promise<string> = exportSession(authState, backupOptions);
 const imported = importSession('zsess1.x', backupOptions);
 const restored = restoreSession(authState, 'zsess1.x', { ...backupOptions, replaceCreds: false });
+const voStoreSize: number = socket.viewOnceStore.size;
+const voResolved = socket.resolveViewOnce({ key: {} });
+const stopVoCache = bindViewOnceCache(socket);
+const voHydrated: Promise<boolean> = hydrateQuotedViewOnce({ key: {}, message: {} }, { store: socket.viewOnceStore });
+const voDownloadable: boolean = hasDownloadableViewOnceMedia({});
 
-export const _unused = [sent, sentLegacy, labeled, bufferDownload, streamDownload, reupload, clearedCache, queueStats, flushing, checked, cacheStats, exported, imported, restored, recovered, recoveredMany, recoveryStats, errorCode, added, managerSockets, managerStats, managerRecovery, managerWithCache, invalidated, groupCacheStats, sharedCache, cachedGroup];
+export const _unused = [sent, sentLegacy, labeled, bufferDownload, streamDownload, reupload, clearedCache, queueStats, flushing, checked, cacheStats, exported, imported, restored, recovered, recoveredMany, recoveryStats, errorCode, added, managerSockets, managerStats, managerRecovery, managerWithCache, invalidated, groupCacheStats, sharedCache, cachedGroup, voStoreSize, voResolved, stopVoCache, voHydrated, voDownloadable];
